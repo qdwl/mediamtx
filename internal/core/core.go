@@ -26,6 +26,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/pprof"
 	"github.com/bluenviron/mediamtx/internal/record"
 	"github.com/bluenviron/mediamtx/internal/rlimit"
+	"github.com/bluenviron/mediamtx/internal/servers/gb28181"
 	"github.com/bluenviron/mediamtx/internal/servers/hls"
 	"github.com/bluenviron/mediamtx/internal/servers/rtmp"
 	"github.com/bluenviron/mediamtx/internal/servers/rtsp"
@@ -100,6 +101,7 @@ type Core struct {
 	hlsServer       *hls.Server
 	webRTCServer    *webrtc.Server
 	srtServer       *srt.Server
+	gb28181Server   *gb28181.Server
 	api             *api.API
 	confWatcher     *confwatcher.ConfWatcher
 
@@ -591,6 +593,28 @@ func (p *Core) createResources(initial bool) error {
 		}
 	}
 
+	if p.conf.GB28181 &&
+		p.gb28181Server == nil {
+		i := &gb28181.Server{
+			Address:        p.conf.GB28181Address,
+			Encryption:     p.conf.GB28181Encryption,
+			ServerKey:      p.conf.GB28181ServerKey,
+			ServerCert:     p.conf.GB28181ServerCert,
+			AllowOrigin:    p.conf.GB28181AllowOrigin,
+			TrustedProxies: p.conf.HLSTrustedProxies,
+			ReadTimeout:    p.conf.ReadTimeout,
+			MinRTPPort:     p.conf.GB28181MinRTPPort,
+			MaxRTPPort:     p.conf.GB28181MaxRTPPort,
+			PathManager:    p.pathManager,
+			Parent:         p,
+		}
+		err := i.Initialize()
+		if err != nil {
+			return err
+		}
+		p.gb28181Server = i
+	}
+
 	if p.conf.API &&
 		p.api == nil {
 		i := &api.API{
@@ -800,6 +824,16 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		closePathManager ||
 		closeLogger
 
+	closeGB28181Server := newConf == nil ||
+		newConf.GB28181 != p.conf.GB28181 ||
+		newConf.GB28181Address != p.conf.GB28181Address ||
+		newConf.GB28181Encryption != p.conf.GB28181Encryption ||
+		newConf.GB28181ServerKey != p.conf.GB28181ServerKey ||
+		newConf.GB28181ServerCert != p.conf.GB28181ServerCert ||
+		newConf.GB28181AllowOrigin != p.conf.GB28181AllowOrigin ||
+		!reflect.DeepEqual(newConf.GB28181TrustedProxies, p.conf.GB28181TrustedProxies) ||
+		newConf.ReadTimeout != p.conf.ReadTimeout
+
 	closeAPI := newConf == nil ||
 		newConf.API != p.conf.API ||
 		newConf.APIAddress != p.conf.APIAddress ||
@@ -825,6 +859,11 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		} else if !calledByAPI { // avoid a loop
 			p.api.ReloadConf(newConf)
 		}
+	}
+
+	if closeGB28181Server && p.gb28181Server != nil {
+		p.gb28181Server.Close()
+		p.gb28181Server = nil
 	}
 
 	if closeSRTServer && p.srtServer != nil {

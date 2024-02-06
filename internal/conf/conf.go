@@ -176,6 +176,18 @@ type Conf struct {
 	SRT        bool   `json:"srt"`
 	SRTAddress string `json:"srtAddress"`
 
+	// GB28181
+	GB28181               bool       `json:"gb28181"`
+	GB28181Disable        *bool      `json:"gb28181Disable,omitempty"` // depreacted
+	GB28181Address        string     `json:"gb28181Address"`
+	GB28181MinRTPPort     int        `json:"gb28181MinRTPPort"`
+	GB28181MaxRTPPort     int        `json:"gb28181MaxRTPPort"`
+	GB28181Encryption     bool       `json:"gb28181Encryption"`
+	GB28181ServerKey      string     `json:"gb28181ServerKey"`
+	GB28181ServerCert     string     `json:"gb28181ServerCert"`
+	GB28181AllowOrigin    string     `json:"gb28181AllowOrigin"`
+	GB28181TrustedProxies IPsOrCIDRs `json:"gb28181TrustedProxies"`
+
 	// Record (deprecated)
 	Record                *bool           `json:"record,omitempty"`                // deprecated
 	RecordPath            *string         `json:"recordPath,omitempty"`            // deprecated
@@ -262,6 +274,15 @@ func (conf *Conf) setDefaults() {
 	// SRT server
 	conf.SRT = true
 	conf.SRTAddress = ":8890"
+
+	// GB28181
+	conf.GB28181 = true
+	conf.GB28181Address = ":8899"
+	conf.GB28181MinRTPPort = 20000
+	conf.GB28181MaxRTPPort = 20200
+	conf.GB28181ServerKey = "server.key"
+	conf.GB28181ServerCert = "server.crt"
+	conf.GB28181AllowOrigin = "*"
 
 	conf.PathDefaults.setDefaults()
 }
