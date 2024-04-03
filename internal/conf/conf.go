@@ -221,6 +221,27 @@ type Conf struct {
 	SRT        bool   `json:"srt"`
 	SRTAddress string `json:"srtAddress"`
 
+	// FLV server
+	FLV                 bool       `json:"flv"`
+	FLVHttpAddress      string     `json:"flvHttpAddress"`
+	FLVWebsocketAddress string     `json:"flvWebsocketAddress"`
+	FLVEncryption       bool       `json:"flvEncryption"`
+	FLVServerKey        string     `json:"flvServerKey"`
+	FLVServerCert       string     `json:"flvServerCert"`
+	FLVAllowOrigin      string     `json:"flvAllowOrigin"`
+	FLVTrustedProxies   IPNetworks `json:"flvTrustedProxies"`
+
+	// GB28181 server
+	GB28181               bool       `json:"gb28181"`
+	GB28181Address        string     `json:"gb28181Address"`
+	GB28181MinRTPPort     int        `json:"gb28181MinRTPPort"`
+	GB28181MaxRTPPort     int        `json:"gb28181MaxRTPPort"`
+	GB28181Encryption     bool       `json:"gb28181Encryption"`
+	GB28181ServerKey      string     `json:"gb28181ServerKey"`
+	GB28181ServerCert     string     `json:"gb28181ServerCert"`
+	GB28181AllowOrigin    string     `json:"gb28181AllowOrigin"`
+	GB28181TrustedProxies IPNetworks `json:"gb28181TrustedProxies"`
+
 	// Record (deprecated)
 	Record                *bool           `json:"record,omitempty"`                // deprecated
 	RecordPath            *string         `json:"recordPath,omitempty"`            // deprecated
@@ -353,6 +374,17 @@ func (conf *Conf) setDefaults() {
 	// SRT server
 	conf.SRT = true
 	conf.SRTAddress = ":8890"
+
+	// FLV server
+	conf.FLV = true
+	conf.FLVHttpAddress = ":8891"
+	conf.FLVWebsocketAddress = ":8892"
+	conf.FLVAllowOrigin = "*"
+
+	// GB28281 server
+	conf.GB28181 = true
+	conf.GB28181Address = ":8893"
+	conf.GB28181AllowOrigin = "*"
 
 	conf.PathDefaults.setDefaults()
 }

@@ -27,6 +27,8 @@ import (
 	"github.com/bluenviron/mediamtx/internal/pprof"
 	"github.com/bluenviron/mediamtx/internal/record"
 	"github.com/bluenviron/mediamtx/internal/rlimit"
+	"github.com/bluenviron/mediamtx/internal/servers/flv"
+	"github.com/bluenviron/mediamtx/internal/servers/gb28181"
 	"github.com/bluenviron/mediamtx/internal/servers/hls"
 	"github.com/bluenviron/mediamtx/internal/servers/rtmp"
 	"github.com/bluenviron/mediamtx/internal/servers/rtsp"
@@ -102,6 +104,8 @@ type Core struct {
 	hlsServer       *hls.Server
 	webRTCServer    *webrtc.Server
 	srtServer       *srt.Server
+	flvServer       *flv.Server
+	gb28181Server   *gb28181.Server
 	api             *api.API
 	confWatcher     *confwatcher.ConfWatcher
 
@@ -606,6 +610,51 @@ func (p *Core) createResources(initial bool) error {
 		}
 	}
 
+	if p.conf.FLV &&
+		p.flvServer == nil {
+		i := &flv.Server{
+			HttpAddress:      p.conf.FLVHttpAddress,
+			WebsocketAddress: p.conf.FLVWebsocketAddress,
+			Encryption:       p.conf.FLVEncryption,
+			ServerKey:        p.conf.FLVServerKey,
+			ServerCert:       p.conf.FLVServerCert,
+			AllowOrigin:      p.conf.FLVAllowOrigin,
+			TrustedProxies:   p.conf.FLVTrustedProxies,
+			ReadTimeout:      p.conf.ReadTimeout,
+			WriteQueueSize:   p.conf.WriteQueueSize,
+			PathManager:      p.pathManager,
+			Parent:           p,
+		}
+		err := i.Initialize()
+		if err != nil {
+			return err
+		}
+		p.flvServer = i
+	}
+
+	if p.conf.GB28181 &&
+		p.gb28181Server == nil {
+		i := &gb28181.Server{
+			Address:        p.conf.GB28181Address,
+			Encryption:     p.conf.GB28181Encryption,
+			ServerKey:      p.conf.GB28181ServerKey,
+			ServerCert:     p.conf.GB28181ServerCert,
+			AllowOrigin:    p.conf.GB28181AllowOrigin,
+			TrustedProxies: p.conf.GB28181TrustedProxies,
+			ReadTimeout:    p.conf.ReadTimeout,
+			WriteQueueSize: p.conf.WriteQueueSize,
+			MinRTPPort:     p.conf.GB28181MinRTPPort,
+			MaxRTPPort:     p.conf.GB28181MaxRTPPort,
+			PathManager:    p.pathManager,
+			Parent:         p,
+		}
+		err := i.Initialize()
+		if err != nil {
+			return err
+		}
+		p.gb28181Server = i
+	}
+
 	if p.conf.API &&
 		p.api == nil {
 		i := &api.API{
@@ -829,6 +878,35 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		closePathManager ||
 		closeLogger
 
+	closeFLVServer := newConf == nil ||
+		newConf.FLV != p.conf.FLV ||
+		newConf.FLVHttpAddress != p.conf.FLVHttpAddress ||
+		newConf.FLVWebsocketAddress != p.conf.FLVWebsocketAddress ||
+		newConf.FLVAllowOrigin != p.conf.FLVAllowOrigin ||
+		newConf.FLVEncryption != p.conf.FLVEncryption ||
+		newConf.FLVServerCert != p.conf.FLVServerCert ||
+		newConf.FLVServerKey != p.conf.FLVServerKey ||
+		newConf.ReadTimeout != p.conf.ReadTimeout ||
+		newConf.WriteQueueSize != p.conf.WriteQueueSize ||
+		!reflect.DeepEqual(newConf.FLVTrustedProxies, p.conf.FLVTrustedProxies) ||
+		closePathManager ||
+		closeLogger
+
+	closeGB28181Server := newConf == nil ||
+		newConf.GB28181 != p.conf.GB28181 ||
+		newConf.GB28181Address != p.conf.GB28181Address ||
+		newConf.GB28181AllowOrigin != p.conf.GB28181AllowOrigin ||
+		newConf.GB28181Encryption != p.conf.GB28181Encryption ||
+		newConf.GB28181ServerKey != p.conf.GB28181ServerKey ||
+		newConf.GB28181ServerCert != p.conf.GB28181ServerCert ||
+		newConf.ReadTimeout != p.conf.ReadTimeout ||
+		newConf.WriteQueueSize != p.conf.WriteQueueSize ||
+		newConf.GB28181MinRTPPort != p.conf.GB28181MinRTPPort ||
+		newConf.GB28181MaxRTPPort != p.conf.GB28181MaxRTPPort ||
+		!reflect.DeepEqual(newConf.GB28181TrustedProxies, p.conf.GB28181TrustedProxies) ||
+		closePathManager ||
+		closeLogger
+
 	closeAPI := newConf == nil ||
 		newConf.API != p.conf.API ||
 		newConf.APIAddress != p.conf.APIAddress ||
@@ -864,6 +942,16 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 
 		p.srtServer.Close()
 		p.srtServer = nil
+	}
+
+	if closeGB28181Server && p.gb28181Server != nil {
+		p.gb28181Server.Close()
+		p.gb28181Server = nil
+	}
+
+	if closeFLVServer && p.flvServer != nil {
+		p.flvServer.Close()
+		p.flvServer = nil
 	}
 
 	if closeWebRTCServer && p.webRTCServer != nil {

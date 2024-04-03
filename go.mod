@@ -19,6 +19,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/matthewhartstonge/argon2 v1.0.0
+	github.com/notedit/rtmp v0.0.2
 	github.com/pion/ice/v2 v2.3.11
 	github.com/pion/interceptor v0.1.27
 	github.com/pion/logging v0.2.2
@@ -27,7 +28,9 @@ require (
 	github.com/pion/sdp/v3 v3.0.8
 	github.com/pion/webrtc/v3 v3.2.22
 	github.com/stretchr/testify v1.9.0
+	github.com/yapingcat/gomedia/mpeg2 v0.0.0-20220617074658-94762898dc25
 	golang.org/x/crypto v0.21.0
+	golang.org/x/net v0.21.0
 	golang.org/x/sys v0.18.0
 	golang.org/x/term v0.18.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -67,8 +70,8 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
+	github.com/yapingcat/gomedia/codec v0.0.0-20220609081842-9e0c0e8a19a0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
