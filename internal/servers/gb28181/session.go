@@ -221,8 +221,13 @@ func (s *session) runPublish() (int, error) {
 
 		case *mpegps.CodecG711A:
 			medi = &description.Media{
-				Type:    description.MediaTypeAudio,
-				Formats: []format.Format{&format.G711{}},
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.G711{
+					PayloadTyp:   98,
+					MULaw:        true,
+					SampleRate:   8000,
+					ChannelCount: 1,
+				}},
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {
@@ -237,8 +242,13 @@ func (s *session) runPublish() (int, error) {
 
 		case *mpegps.CodecG711U:
 			medi = &description.Media{
-				Type:    description.MediaTypeAudio,
-				Formats: []format.Format{&format.G711{}},
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.G711{
+					PayloadTyp:   98,
+					MULaw:        false,
+					SampleRate:   8000,
+					ChannelCount: 1,
+				}},
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {

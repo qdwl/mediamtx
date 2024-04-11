@@ -136,7 +136,7 @@ authJWTJWKS:
 # Global settings -> API
 
 # Enable controlling the server through the API.
-api: no
+api: yes
 # Address of the API listener.
 apiAddress: :9997
 
@@ -346,6 +346,34 @@ flvAllowOrigin: "*"
 # If the server receives a request from one of these entries, IP in logs
 # will be taken from the X-Forwarded-For header.
 flvTrustedProxies: []
+
+###############################################
+# Global settings -> GB28181 parameters
+
+# Enables support for the GB28181 protocol.
+gb28181: yes
+# Address of the GB28181 listener.
+gb28181Address: :8893
+# Port of GB28181 RTP/RTCP minimum listeners.
+gb28181MinRTPPort: 20000
+# Port of GB28181 RTP/RTCP maximum listeners.
+gb28181MaxRTPPort: 20200
+# Enable TLS/HTTPS on the GB28181 server.
+gb28181Encryption: no
+# Path to the server key.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+gb28181ServerKey: server.key
+# Path to the server certificate.
+gb28181ServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+# This allows to play the GB28181 stream from an external website.
+gb28181AllowOrigin: "*"
+# List of IPs or CIDRs of proxies placed before the GB28181 server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+gb28181TrustedProxies: []
 
 ###############################################
 # Default path settings
