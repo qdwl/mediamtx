@@ -4,12 +4,12 @@ go 1.21
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0
-	github.com/MicahParks/keyfunc/v3 v3.2.9
+	github.com/MicahParks/keyfunc/v3 v3.3.2
 	github.com/abema/go-mp4 v1.2.0
 	github.com/alecthomas/kong v0.9.0
-	github.com/bluenviron/gohlslib v1.3.0
-	github.com/bluenviron/gortsplib/v4 v4.8.0
-	github.com/bluenviron/mediacommon v1.9.2
+	github.com/bluenviron/gohlslib v1.3.1
+	github.com/bluenviron/gortsplib/v4 v4.8.1
+	github.com/bluenviron/mediacommon v1.9.3
 	github.com/datarhei/gosrt v0.6.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/gin-gonic/gin v1.9.1
@@ -21,23 +21,23 @@ require (
 	github.com/matthewhartstonge/argon2 v1.0.0
 	github.com/notedit/rtmp v0.0.2
 	github.com/pion/ice/v2 v2.3.11
-	github.com/pion/interceptor v0.1.27
+	github.com/pion/interceptor v0.1.28
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.14
-	github.com/pion/rtp v1.8.4
-	github.com/pion/sdp/v3 v3.0.8
+	github.com/pion/rtp v1.8.5
+	github.com/pion/sdp/v3 v3.0.9
 	github.com/pion/webrtc/v3 v3.2.22
 	github.com/stretchr/testify v1.9.0
 	github.com/yapingcat/gomedia/mpeg2 v0.0.0-20220617074658-94762898dc25
-	golang.org/x/crypto v0.21.0
-	golang.org/x/net v0.21.0
-	golang.org/x/sys v0.18.0
-	golang.org/x/term v0.18.0
+	golang.org/x/crypto v0.22.0
+	golang.org/x/net v0.24.0
+	golang.org/x/sys v0.19.0
+	golang.org/x/term v0.19.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
-	github.com/MicahParks/jwkset v0.5.15 // indirect
+	github.com/MicahParks/jwkset v0.5.17 // indirect
 	github.com/asticode/go-astikit v0.30.0 // indirect
 	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c // indirect

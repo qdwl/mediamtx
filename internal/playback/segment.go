@@ -1,7 +1,6 @@
 package playback
 
 import (
-	"fmt"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -14,9 +13,8 @@ import (
 
 // Segment is a recording segment.
 type Segment struct {
-	fpath    string
-	Start    time.Time
-	duration time.Duration
+	Fpath string
+	Start time.Time
 }
 
 func findSegmentsInTimespan(
@@ -25,10 +23,6 @@ func findSegmentsInTimespan(
 	start time.Time,
 	duration time.Duration,
 ) ([]*Segment, error) {
-	if !pathConf.Playback {
-		return nil, fmt.Errorf("playback is disabled on path '%s'", pathName)
-	}
-
 	recordPath := record.PathAddExtension(
 		strings.ReplaceAll(pathConf.RecordPath, "%path", pathName),
 		pathConf.RecordFormat,
@@ -54,7 +48,7 @@ func findSegmentsInTimespan(
 			// gather all segments that starts before the end of the playback
 			if ok && !end.Before(pa.Start) {
 				segments = append(segments, &Segment{
-					fpath: fpath,
+					Fpath: fpath,
 					Start: pa.Start,
 				})
 			}
@@ -100,10 +94,6 @@ func FindSegments(
 	pathConf *conf.Path,
 	pathName string,
 ) ([]*Segment, error) {
-	if !pathConf.Playback {
-		return nil, fmt.Errorf("playback is disabled on path '%s'", pathName)
-	}
-
 	recordPath := record.PathAddExtension(
 		strings.ReplaceAll(pathConf.RecordPath, "%path", pathName),
 		pathConf.RecordFormat,
@@ -126,7 +116,7 @@ func FindSegments(
 			ok := pa.Decode(recordPath, fpath)
 			if ok {
 				segments = append(segments, &Segment{
-					fpath: fpath,
+					Fpath: fpath,
 					Start: pa.Start,
 				})
 			}
@@ -147,25 +137,4 @@ func FindSegments(
 	})
 
 	return segments, nil
-}
-
-func canBeConcatenated(seg1, seg2 *Segment) bool {
-	end1 := seg1.Start.Add(seg1.duration)
-	return !seg2.Start.Before(end1.Add(-concatenationTolerance)) && !seg2.Start.After(end1.Add(concatenationTolerance))
-}
-
-func mergeConcatenatedSegments(in []*Segment) []*Segment {
-	var out []*Segment
-
-	for _, seg := range in {
-		if len(out) != 0 && canBeConcatenated(out[len(out)-1], seg) {
-			start := out[len(out)-1].Start
-			end := seg.Start.Add(seg.duration)
-			out[len(out)-1].duration = end.Sub(start)
-		} else {
-			out = append(out, seg)
-		}
-	}
-
-	return out
 }

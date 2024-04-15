@@ -1348,7 +1348,7 @@ Where [mypath] is the name of a path. The server will return a list of timespans
 The server provides an endpoint for downloading recordings:
 
 ```
-http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]
+http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]&format=[format]
 ```
 
 Where:
@@ -1356,6 +1356,7 @@ Where:
 * [mypath] is the path name
 * [start_date] is the start date in [RFC3339 format](https://www.utctime.net/)
 * [duration] is the maximum duration of the recording in seconds
+* [format] (optional) is the output format of the stream. Available values are "fmp4" (default) and "mp4"
 
 All parameters must be [url-encoded](https://www.urlencoder.org/). For instance:
 
@@ -1369,6 +1370,12 @@ The resulting stream uses the fMP4 format, that is natively compatible with any 
 <video controls>
   <source src="http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]" type="video/mp4" />
 </video>
+```
+
+The fMP4 format may offer limited compatibility with some players. It's possible to use the standard MP4 format by adding `format=mp4` to a `/get` request:
+
+```
+http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]&format=mp4
 ```
 
 ### Forward streams to other servers
@@ -1676,7 +1683,7 @@ api: yes
 The API listens on `apiAddress`, that by default is `127.0.0.1:9997`; for instance, to obtain a list of active paths, run:
 
 ```
-curl http://127.0.0.1:9997/v2/paths/list
+curl http://127.0.0.1:9997/v3/paths/list
 ```
 
 Full documentation of the Control API is available on the [dedicated site](https://bluenviron.github.io/mediamtx/).
@@ -1878,6 +1885,16 @@ webrtcICEServers2:
 ```
 
 where secret is the secret of the TURN server. MediaMTX will generate a set of credentials by using the secret, and credentials will be sent to clients before the WebRTC/ICE connection is established.
+
+In some cases you may want the browser to connect using TURN servers but have mediamtx not using TURN (for example if the TURN server is on the same network as mediamtx).  To allow this you can configure the TURN server to be client only:
+
+```yml
+webrtcICEServers2:
+- url: turn:host:port
+  username: user
+  password: password
+  clientOnly: true
+```
 
 ### RTSP-specific features
 

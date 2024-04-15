@@ -18,10 +18,15 @@ import (
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/test"
 	"github.com/bluenviron/mediamtx/internal/unit"
+	"github.com/google/uuid"
 	"github.com/pion/rtp"
 	pwebrtc "github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/require"
 )
+
+func uint16Ptr(v uint16) *uint16 {
+	return &v
+}
 
 func checkClose(t *testing.T, closeFunc func() error) {
 	require.NoError(t, closeFunc())
@@ -90,7 +95,13 @@ func (pm *dummyPathManager) AddReader(req defs.PathAddReaderReq) (defs.Path, *st
 	return pm.path, pm.path.stream, nil
 }
 
-func TestServerStaticPages(t *testing.T) {
+func initializeTestServer(t *testing.T) *Server {
+	path := &dummyPath{
+		streamCreated: make(chan struct{}),
+	}
+
+	pathManager := &dummyPathManager{path: path}
+
 	s := &Server{
 		Address:               "127.0.0.1:8886",
 		Encryption:            false,
@@ -107,11 +118,17 @@ func TestServerStaticPages(t *testing.T) {
 		AdditionalHosts:       []string{},
 		ICEServers:            []conf.WebRTCICEServer{},
 		ExternalCmdPool:       nil,
-		PathManager:           &dummyPathManager{},
+		PathManager:           pathManager,
 		Parent:                test.NilLogger{},
 	}
 	err := s.Initialize()
 	require.NoError(t, err)
+
+	return s
+}
+
+func TestServerStaticPages(t *testing.T) {
+	s := initializeTestServer(t)
 	defer s.Close()
 
 	tr := &http.Transport{}
@@ -130,6 +147,84 @@ func TestServerStaticPages(t *testing.T) {
 			require.Equal(t, http.StatusOK, res.StatusCode)
 		}()
 	}
+}
+
+func TestServerOptionsPreflight(t *testing.T) {
+	s := initializeTestServer(t)
+	defer s.Close()
+
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr}
+
+	// preflight requests must always work, without authentication
+	req, err := http.NewRequest(http.MethodOptions, "http://localhost:8886/teststream/whip", nil)
+	require.NoError(t, err)
+
+	req.Header.Set("Access-Control-Request-Method", "OPTIONS")
+
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusNoContent, res.StatusCode)
+
+	_, ok := res.Header["Link"]
+	require.Equal(t, false, ok)
+}
+
+func TestServerOptionsICEServer(t *testing.T) {
+	pathManager := &dummyPathManager{}
+
+	s := &Server{
+		Address:               "127.0.0.1:8886",
+		Encryption:            false,
+		ServerKey:             "",
+		ServerCert:            "",
+		AllowOrigin:           "",
+		TrustedProxies:        conf.IPNetworks{},
+		ReadTimeout:           conf.StringDuration(10 * time.Second),
+		WriteQueueSize:        512,
+		LocalUDPAddress:       "127.0.0.1:8887",
+		LocalTCPAddress:       "127.0.0.1:8887",
+		IPsFromInterfaces:     true,
+		IPsFromInterfacesList: []string{},
+		AdditionalHosts:       []string{},
+		ICEServers: []conf.WebRTCICEServer{{
+			URL:      "example.com",
+			Username: "myuser",
+			Password: "mypass",
+		}},
+		ExternalCmdPool: nil,
+		PathManager:     pathManager,
+		Parent:          test.NilLogger{},
+	}
+	err := s.Initialize()
+	require.NoError(t, err)
+	defer s.Close()
+
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr}
+
+	req, err := http.NewRequest(http.MethodOptions,
+		"http://myuser:mypass@localhost:8886/nonexisting/whep", nil)
+	require.NoError(t, err)
+
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusNoContent, res.StatusCode)
+
+	iceServers, err := webrtc.LinkHeaderUnmarshal(res.Header["Link"])
+	require.NoError(t, err)
+
+	require.Equal(t, []pwebrtc.ICEServer{{
+		URLs:       []string{"example.com"},
+		Username:   "myuser",
+		Credential: "mypass",
+	}}, iceServers)
 }
 
 func TestServerPublish(t *testing.T) {
@@ -166,26 +261,7 @@ func TestServerPublish(t *testing.T) {
 	defer tr.CloseIdleConnections()
 	hc := &http.Client{Transport: tr}
 
-	// preflight requests must always work, without authentication
-	func() {
-		req, err := http.NewRequest(http.MethodOptions, "http://localhost:8886/teststream/whip", nil)
-		require.NoError(t, err)
-
-		req.Header.Set("Access-Control-Request-Method", "OPTIONS")
-
-		res, err := hc.Do(req)
-		require.NoError(t, err)
-		defer res.Body.Close()
-
-		require.Equal(t, http.StatusNoContent, res.StatusCode)
-
-		_, ok := res.Header["Link"]
-		require.Equal(t, false, ok)
-	}()
-
-	ur := "http://myuser:mypass@localhost:8886/teststream/whip?param=value"
-
-	su, err := url.Parse(ur)
+	su, err := url.Parse("http://myuser:mypass@localhost:8886/teststream/whip?param=value")
 	require.NoError(t, err)
 
 	wc := &webrtc.WHIPClient{
@@ -221,10 +297,17 @@ func TestServerPublish(t *testing.T) {
 		path.stream.Desc().Medias[0],
 		path.stream.Desc().Medias[0].Formats[0],
 		func(u unit.Unit) error {
+			select {
+			case <-recv:
+				return nil
+			default:
+			}
+
 			require.Equal(t, [][]byte{
 				{1},
 			}, u.(*unit.H264).AU)
 			close(recv)
+
 			return nil
 		})
 
@@ -284,9 +367,7 @@ func TestServerRead(t *testing.T) {
 	require.NoError(t, err)
 	defer s.Close()
 
-	ur := "http://myuser:mypass@localhost:8886/teststream/whep?param=value"
-
-	u, err := url.Parse(ur)
+	u, err := url.Parse("http://myuser:mypass@localhost:8886/teststream/whep?param=value")
 	require.NoError(t, err)
 
 	tr := &http.Transport{}
@@ -350,43 +431,15 @@ func TestServerRead(t *testing.T) {
 	}, pkt)
 }
 
-func TestServerReadNotFound(t *testing.T) {
-	pathManager := &dummyPathManager{}
-
-	s := &Server{
-		Address:               "127.0.0.1:8886",
-		Encryption:            false,
-		ServerKey:             "",
-		ServerCert:            "",
-		AllowOrigin:           "",
-		TrustedProxies:        conf.IPNetworks{},
-		ReadTimeout:           conf.StringDuration(10 * time.Second),
-		WriteQueueSize:        512,
-		LocalUDPAddress:       "127.0.0.1:8887",
-		LocalTCPAddress:       "127.0.0.1:8887",
-		IPsFromInterfaces:     true,
-		IPsFromInterfacesList: []string{},
-		AdditionalHosts:       []string{},
-		ICEServers:            []conf.WebRTCICEServer{},
-		ExternalCmdPool:       nil,
-		PathManager:           pathManager,
-		Parent:                test.NilLogger{},
-	}
-	err := s.Initialize()
-	require.NoError(t, err)
+func TestServerPostNotFound(t *testing.T) {
+	s := initializeTestServer(t)
 	defer s.Close()
 
 	tr := &http.Transport{}
 	defer tr.CloseIdleConnections()
 	hc := &http.Client{Transport: tr}
 
-	iceServers, err := webrtc.WHIPOptionsICEServers(context.Background(), hc,
-		"http://myuser:mypass@localhost:8886/nonexisting/whep")
-	require.NoError(t, err)
-
-	pc, err := pwebrtc.NewPeerConnection(pwebrtc.Configuration{
-		ICEServers: iceServers,
-	})
+	pc, err := pwebrtc.NewPeerConnection(pwebrtc.Configuration{})
 	require.NoError(t, err)
 	defer pc.Close() //nolint:errcheck
 
@@ -407,4 +460,97 @@ func TestServerReadNotFound(t *testing.T) {
 	defer res.Body.Close()
 
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
+func TestServerPatchNotFound(t *testing.T) {
+	s := initializeTestServer(t)
+	defer s.Close()
+
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr}
+
+	pc, err := pwebrtc.NewPeerConnection(pwebrtc.Configuration{})
+	require.NoError(t, err)
+	defer pc.Close() //nolint:errcheck
+
+	_, err = pc.AddTransceiverFromKind(pwebrtc.RTPCodecTypeVideo)
+	require.NoError(t, err)
+
+	offer, err := pc.CreateOffer(nil)
+	require.NoError(t, err)
+
+	frag, err := webrtc.ICEFragmentMarshal(offer.SDP, []*pwebrtc.ICECandidateInit{{
+		Candidate:     "mycandidate",
+		SDPMLineIndex: uint16Ptr(0),
+	}})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPatch,
+		"http://localhost:8886/nonexisting/whep/"+uuid.UUID{}.String(), bytes.NewReader(frag))
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Type", "application/trickle-ice-sdpfrag")
+
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
+func TestServerDeleteNotFound(t *testing.T) {
+	s := initializeTestServer(t)
+	defer s.Close()
+
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr}
+
+	req, err := http.NewRequest(http.MethodDelete,
+		"http://localhost:8886/nonexisting/whep/"+uuid.UUID{}.String(), nil)
+	require.NoError(t, err)
+
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
+func TestICEServerNoClientOnly(t *testing.T) {
+	s := &Server{
+		ICEServers: []conf.WebRTCICEServer{
+			{
+				URL:      "turn:turn.example.com:1234",
+				Username: "user",
+				Password: "passwrd",
+			},
+		},
+	}
+	clientICEServers, err := s.generateICEServers(true)
+	require.NoError(t, err)
+	require.Equal(t, len(s.ICEServers), len(clientICEServers))
+	serverICEServers, err := s.generateICEServers(false)
+	require.NoError(t, err)
+	require.Equal(t, len(s.ICEServers), len(serverICEServers))
+}
+
+func TestICEServerClientOnly(t *testing.T) {
+	s := &Server{
+		ICEServers: []conf.WebRTCICEServer{
+			{
+				URL:        "turn:turn.example.com:1234",
+				Username:   "user",
+				Password:   "passwrd",
+				ClientOnly: true,
+			},
+		},
+	}
+	clientICEServers, err := s.generateICEServers(true)
+	require.NoError(t, err)
+	require.Equal(t, len(s.ICEServers), len(clientICEServers))
+	serverICEServers, err := s.generateICEServers(false)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(serverICEServers))
 }

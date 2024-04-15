@@ -190,6 +190,8 @@ components:
                 type: string
               password:
                 type: string
+              clientOnly:
+                type: boolean
 
         # SRT server
         srt:
@@ -221,10 +223,8 @@ components:
         fallback:
           type: string
 
-        # Record and playback
+        # Record
         record:
-          type: boolean
-        playback:
           type: boolean
         recordPath:
           type: string
