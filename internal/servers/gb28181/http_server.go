@@ -98,7 +98,34 @@ func (s *httpServer) onPublish(ctx *gin.Context) {
 }
 
 func (s *httpServer) onPlay(ctx *gin.Context) {
+	req := GB28181PlayReq{}
 
+	if err := ctx.ShouldBind(&req); err != nil {
+		ctx.Writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	res := s.parent.newSession(gb28181NewSessionReq{
+		pathName:   req.PathName,
+		ssrc:       req.SSRC,
+		remoteIp:   req.RemoteIP,
+		remotePort: req.RemotePort,
+		publish:    false,
+	})
+	if res.err != nil {
+		if res.errStatusCode != 0 {
+			ctx.Writer.WriteHeader(res.errStatusCode)
+		}
+		return
+	}
+
+	res1 := GB28181PlayRes{
+		PathName:  res.sx.req.pathName,
+		SessionID: res.sx.uuid.String(),
+		LocalPort: uint16(res.sx.conn.Port()),
+	}
+
+	ctx.JSON(http.StatusOK, &res1)
 }
 
 func (s *httpServer) onDelete(ctx *gin.Context) {

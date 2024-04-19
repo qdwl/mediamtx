@@ -14,6 +14,7 @@ type Transport interface {
 	Close()
 	IP() net.IP
 	Port() int
+	Write(buf []byte, addr *net.UDPAddr) error
 }
 
 const (
@@ -22,7 +23,4 @@ const (
 
 	// 1500 (UDP MTU) - 20 (IP header) - 8 (UDP header)
 	maxPacketSize = 1472
-
-	// same size as GStreamer's rtspsrc
-	multicastTTL = 16
 )

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
@@ -33,10 +34,16 @@ type Conn struct {
 	transport           transport.Transport
 	ctx                 context.Context
 	ctxCancel           func()
+	muxer               *mpeg2.PSMuxer
 	demuxer             *mpeg2.PSDemuxer
+	rtpPacketizer       *RtpPacketizer
 	tracks              map[uint8]*mpegps.Track
 	trackGatherComplete bool
 	trackProbe          chan trackProbeReq
+	pts                 uint64
+	dts                 uint64
+	buf                 []byte
+	remoteAddr          *net.UDPAddr
 
 	// in
 	packetChan chan mpeg2.Display
@@ -50,6 +57,8 @@ type Conn struct {
 func NewConn(
 	parnteCtx context.Context,
 	port uint16,
+	remoteIp string,
+	remotePort uint16,
 	protocol string,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parnteCtx)
@@ -58,15 +67,31 @@ func NewConn(
 		port:                port,
 		ctx:                 ctx,
 		ctxCancel:           ctxCancel,
+		muxer:               mpeg2.NewPsMuxer(),
 		demuxer:             mpeg2.NewPSDemuxer(),
 		tracks:              make(map[uint8]*mpegps.Track),
 		trackGatherComplete: false,
 		trackProbe:          make(chan trackProbeReq),
+		pts:                 0,
+		dts:                 0,
+		buf:                 make([]byte, 1500),
 		packetChan:          make(chan mpeg2.Display),
 		frameChan:           make(chan *PsFrame),
 		demuxerChan:         make(chan *PsFrame, 30),
 		done:                make(chan struct{}),
 	}
+
+	udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", remoteIp, remotePort))
+	if err != nil {
+		fmt.Println("ResolveUDPAddr failed:", err)
+		return nil
+	}
+	c.remoteAddr = udpAddr
+
+	c.rtpPacketizer = &RtpPacketizer{
+		PayloadType: 98,
+	}
+	c.rtpPacketizer.Init()
 
 	localAddress := fmt.Sprintf(":%d", port)
 
@@ -74,7 +99,8 @@ func NewConn(
 		c.transport, _ = transport.NewUdpSocket(c, localAddress)
 	}
 
-	c.demuxer.OnPacket = c.OnPacket
+	c.muxer.OnPacket = c.OnMuxPacket
+	c.demuxer.OnPacket = c.OnDemuxPacket
 
 	go c.run()
 
@@ -127,11 +153,30 @@ func (c *Conn) ReadPsFrame() (frame *PsFrame, err error) {
 	}
 }
 
-func (c *Conn) OnPacket(pkg mpeg2.Display, decodeResult error) {
+func (c *Conn) AddStream(cid mpeg2.PS_STREAM_TYPE) uint8 {
+	return c.muxer.AddStream(cid)
+}
+
+func (c *Conn) OnDemuxPacket(pkg mpeg2.Display, decodeResult error) {
 	select {
 	case c.packetChan <- pkg:
 	case <-c.ctx.Done():
 		return
+	}
+}
+
+func (c *Conn) OnMuxPacket(pkg []byte) {
+	pkts, err := c.rtpPacketizer.Encode(pkg, uint32(c.pts))
+	if err != nil {
+		return
+	}
+
+	for _, pkt := range pkts {
+		n, err := pkt.MarshalTo(c.buf)
+		if err != nil {
+			continue
+		}
+		c.write(c.buf[:n], c.remoteAddr)
 	}
 }
 
@@ -192,7 +237,7 @@ func (c *Conn) ProcessRtpPacket(pkt *rtp.Packet) {
 }
 
 func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
-	if c.trackGatherComplete == true {
+	if c.trackGatherComplete {
 		return
 	}
 
@@ -289,7 +334,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 		}
 	}
 
-	if c.trackGatherComplete == true {
+	if c.trackGatherComplete {
 		c.demuxer.OnFrame = c.OnFrame
 	}
 }
@@ -300,4 +345,18 @@ func (c *Conn) ProcessPsFrame(frame *PsFrame) {
 	case <-c.ctx.Done():
 		return
 	}
+}
+
+func (c *Conn) Write(sid uint8, frame []byte, pts uint64, dts uint64) {
+	c.pts = pts
+	c.dts = dts
+
+	c.muxer.Write(sid, frame, pts, dts)
+}
+
+func (c *Conn) write(buf []byte, addr *net.UDPAddr) error {
+	if c.transport != nil {
+		return c.transport.Write(buf, addr)
+	}
+	return nil
 }

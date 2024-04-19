@@ -12,7 +12,9 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/mediacommon/pkg/codecs/h264"
+	"github.com/bluenviron/mediacommon/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediamtx/internal/asyncwriter"
 	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
@@ -21,7 +23,11 @@ import (
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/unit"
 	"github.com/google/uuid"
+	"github.com/yapingcat/gomedia/mpeg2"
 )
+
+var errNoSupportedCodecs = errors.New(
+	"the stream doesn't contain any supported codec, which are currently H264, MPEG-4 Audio, MPEG-1/2 Audio")
 
 type session struct {
 	parentCtx      context.Context
@@ -38,6 +44,8 @@ type session struct {
 	uuid       uuid.UUID
 	answerSent bool
 	conn       *gb28181.Conn
+	vcid       uint8
+	acid       uint8
 
 	chNew chan gb28181NewSessionReq
 }
@@ -49,7 +57,7 @@ func (s *session) initialize() {
 	s.ctxCancel = ctxCancel
 	s.created = time.Now()
 	s.uuid = uuid.New()
-	s.conn = gb28181.NewConn(ctx, uint16(s.portPair.RTPPort), "RTP/AVP")
+	s.conn = gb28181.NewConn(ctx, uint16(s.portPair.RTPPort), s.req.remoteIp, s.req.remotePort, "RTP/AVP")
 	s.chNew = make(chan gb28181NewSessionReq)
 
 	s.Log(logger.Info, "created by %s", s.req.pathName)
@@ -296,7 +304,216 @@ func (s *session) runPublish() (int, error) {
 }
 
 func (s *session) runRead() (int, error) {
-	return 0, nil
+	path, stream, err := s.pathManager.AddReader(defs.PathAddReaderReq{
+		Author: s,
+		AccessRequest: defs.PathAccessRequest{
+			Name:     s.req.pathName,
+			SkipAuth: true,
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer path.RemoveReader(defs.PathRemoveReaderReq{Author: s})
+
+	writer := asyncwriter.New(s.writeQueueSize, s)
+
+	defer stream.RemoveReader(writer)
+
+	videoFormat := s.setupVideo(stream, writer)
+	audioFormat := s.setupAudio(stream, writer)
+
+	if videoFormat == nil && audioFormat == nil {
+		return 0, errNoSupportedCodecs
+	}
+
+	s.Log(logger.Info, "is reading from path '%s', %s",
+		path.Name(), defs.FormatsInfo(stream.FormatsForReader(writer)))
+
+	if videoFormat != nil {
+		s.vcid = s.conn.AddStream(mpeg2.PS_STREAM_H264)
+	}
+
+	if audioFormat != nil {
+		s.acid = s.conn.AddStream(mpeg2.PS_STREAM_AAC)
+	}
+
+	writer.Start()
+
+	select {
+	case <-s.ctx.Done():
+		writer.Stop()
+		return 0, fmt.Errorf("terminated")
+
+	case err := <-writer.Error():
+		return 0, err
+	}
+}
+
+func (s *session) setupVideo(
+	stream *stream.Stream,
+	writer *asyncwriter.Writer,
+) format.Format {
+	var videoFormatH264 *format.H264
+	videoMedia := stream.Desc().FindFormat(&videoFormatH264)
+
+	if videoFormatH264 != nil {
+		var videoDTSExtractor *h264.DTSExtractor
+
+		stream.AddReader(writer, videoMedia, videoFormatH264, func(u unit.Unit) error {
+			tunit := u.(*unit.H264)
+
+			if tunit.AU == nil {
+				return nil
+			}
+
+			idrPresent := false
+			nonIDRPresent := false
+
+			for _, nalu := range tunit.AU {
+				typ := h264.NALUType(nalu[0] & 0x1F)
+				switch typ {
+				case h264.NALUTypeIDR:
+					idrPresent = true
+
+				case h264.NALUTypeNonIDR:
+					nonIDRPresent = true
+				}
+			}
+
+			var dts time.Duration
+
+			// wait until we receive an IDR
+			if videoDTSExtractor == nil {
+				if !idrPresent {
+					return nil
+				}
+
+				videoDTSExtractor = h264.NewDTSExtractor()
+
+				var err error
+				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
+				if err != nil {
+					return err
+				}
+			} else {
+				if !idrPresent && !nonIDRPresent {
+					return nil
+				}
+
+				var err error
+				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
+				if err != nil {
+					return err
+				}
+			}
+
+			return s.writeH264(tunit.PTS, dts, idrPresent, tunit.AU)
+		})
+
+		return videoFormatH264
+	}
+
+	var videoFormatH265 *format.H265
+	videoMedia = stream.Desc().FindFormat(&videoFormatH265)
+	if videoFormatH265 != nil {
+		var videoDTSExtractor *h265.DTSExtractor
+
+		stream.AddReader(writer, videoMedia, videoFormatH265, func(u unit.Unit) error {
+			tunit := u.(*unit.H265)
+
+			if tunit.AU == nil {
+				return nil
+			}
+
+			idrPresent := false
+
+			for _, nalu := range tunit.AU {
+				typ := h265.NALUType((nalu[0] >> 1) & 0b111111)
+
+				switch typ {
+				case h265.NALUType_IDR_W_RADL, h265.NALUType_IDR_N_LP, h265.NALUType_CRA_NUT:
+					idrPresent = true
+				}
+			}
+
+			var dts time.Duration
+
+			// wait until we receive an IDR
+			if videoDTSExtractor == nil {
+				if !idrPresent {
+					return nil
+				}
+
+				videoDTSExtractor = h265.NewDTSExtractor()
+
+				var err error
+				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
+				if err != nil {
+					return err
+				}
+			} else {
+				var err error
+				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
+				if err != nil {
+					return err
+				}
+			}
+
+			return s.writeH265(tunit.PTS, dts, idrPresent, tunit.AU)
+		})
+
+		return videoFormatH265
+	}
+
+	return nil
+}
+
+func (s *session) setupAudio(
+	stream *stream.Stream,
+	writer *asyncwriter.Writer,
+) format.Format {
+	var audioFormatMPEG4Audio *format.MPEG4Audio
+	audioMedia := stream.Desc().FindFormat(&audioFormatMPEG4Audio)
+
+	if audioMedia != nil {
+		stream.AddReader(writer, audioMedia, audioFormatMPEG4Audio, func(u unit.Unit) error {
+			tunit := u.(*unit.MPEG4Audio)
+
+			if tunit.AUs == nil {
+				return nil
+			}
+
+			for i, au := range tunit.AUs {
+				err := s.WriteMPEG4Audio(
+					tunit.PTS+time.Duration(i)*mpeg4audio.SamplesPerAccessUnit*
+						time.Second/time.Duration(audioFormatMPEG4Audio.ClockRate()),
+					au,
+				)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		})
+
+		return audioFormatMPEG4Audio
+	}
+
+	return nil
+}
+
+func (s *session) writeH264(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
+	return nil
+}
+
+func (s *session) writeH265(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
+	return nil
+}
+
+func (s *session) WriteMPEG4Audio(pts time.Duration, au []byte) error {
+	return nil
 }
 
 func (s *session) writeAnswer() error {

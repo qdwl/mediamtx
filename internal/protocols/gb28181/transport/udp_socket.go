@@ -84,7 +84,7 @@ func (u *UdpSocket) runReader() {
 	}
 }
 
-func (u *UdpSocket) write(buf []byte, addr *net.UDPAddr) error {
+func (u *UdpSocket) Write(buf []byte, addr *net.UDPAddr) error {
 	// no mutex is needed here since Write() has an internal lock.
 	// https://github.com/golang/go/issues/27203#issuecomment-534386117
 	u.pc.SetWriteDeadline(time.Now().Add(u.writeTimeout))
