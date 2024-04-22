@@ -304,6 +304,20 @@ func (s *session) runPublish() (int, error) {
 }
 
 func (s *session) runRead() (int, error) {
+	_, err := s.pathManager.FindPathConf(defs.PathFindPathConfReq{
+		AccessRequest: defs.PathAccessRequest{
+			Name:     s.req.pathName,
+			SkipAuth: true,
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	s.writeAnswer()
+
+	<-time.After(10 * time.Second)
+
 	path, stream, err := s.pathManager.AddReader(defs.PathAddReaderReq{
 		Author: s,
 		AccessRequest: defs.PathAccessRequest{
@@ -505,14 +519,21 @@ func (s *session) setupAudio(
 }
 
 func (s *session) writeH264(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
+	for _, u := range au {
+		s.conn.Write(s.vcid, u, uint64(pts), uint64(dts))
+	}
 	return nil
 }
 
 func (s *session) writeH265(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
+	for _, u := range au {
+		s.conn.Write(s.vcid, u, uint64(pts), uint64(dts))
+	}
 	return nil
 }
 
 func (s *session) WriteMPEG4Audio(pts time.Duration, au []byte) error {
+	s.conn.Write(s.acid, au, uint64(pts), uint64(pts))
 	return nil
 }
 

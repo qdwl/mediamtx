@@ -79,16 +79,18 @@ func (e *RtpPacketizer) Encode(nalu []byte, ts uint32) ([]*rtp.Packet, error) {
 	var rets []*rtp.Packet
 	packetCount := packetCount(e.PayloadMaxSize, len(nalu))
 
-	ret := make([]*rtp.Packet, packetCount)
+	rets = make([]*rtp.Packet, packetCount)
 
 	le := e.PayloadMaxSize
-	for i := range ret {
+	for i := range rets {
 
 		data := make([]byte, le)
 		copy(data, nalu)
-		nalu = nalu[le:]
+		if len(nalu) > le {
+			nalu = nalu[le:]
+		}
 
-		ret[i] = &rtp.Packet{
+		rets[i] = &rtp.Packet{
 			Header: rtp.Header{
 				Version:        rtpVersion,
 				PayloadType:    e.PayloadType,
