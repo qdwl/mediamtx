@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 
 type UdpSocket struct {
 	pc           *net.UDPConn
-	listenIP     net.IP
+	remoteAddr   *net.UDPAddr
 	writeTimeout time.Duration
 	reader       PacketProcessor
 
@@ -18,19 +19,23 @@ type UdpSocket struct {
 
 func NewUdpSocket(
 	reader PacketProcessor,
-	address string,
+	localAddr string,
+	remoteAddr string,
 ) (*UdpSocket, error) {
 	var pc *net.UDPConn
-	var listenIP net.IP
 
-	tmp, err := net.ListenPacket("udp", address)
+	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		fmt.Println("ResolveUDPAddr failed:", err)
+		return nil, fmt.Errorf("remote address fmt error")
+	}
+
+	tmp, err := net.ListenPacket("udp", localAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	pc = tmp.(*net.UDPConn)
-	listenIP = tmp.LocalAddr().(*net.UDPAddr).IP
-
 	err = pc.SetReadBuffer(udpKernelReadBufferSize)
 	if err != nil {
 		return nil, err
@@ -38,7 +43,7 @@ func NewUdpSocket(
 
 	u := &UdpSocket{
 		pc:           pc,
-		listenIP:     listenIP,
+		remoteAddr:   addr,
 		writeTimeout: 10 * time.Second,
 		reader:       reader,
 		done:         make(chan struct{}),
@@ -52,14 +57,6 @@ func NewUdpSocket(
 func (u *UdpSocket) Close() {
 	u.pc.Close()
 	<-u.done
-}
-
-func (u *UdpSocket) IP() net.IP {
-	return u.listenIP
-}
-
-func (u *UdpSocket) Port() int {
-	return u.pc.LocalAddr().(*net.UDPAddr).Port
 }
 
 func (u *UdpSocket) runReader() {
@@ -84,10 +81,10 @@ func (u *UdpSocket) runReader() {
 	}
 }
 
-func (u *UdpSocket) Write(buf []byte, addr *net.UDPAddr) error {
+func (u *UdpSocket) Write(buf []byte) error {
 	// no mutex is needed here since Write() has an internal lock.
 	// https://github.com/golang/go/issues/27203#issuecomment-534386117
 	u.pc.SetWriteDeadline(time.Now().Add(u.writeTimeout))
-	_, err := u.pc.WriteTo(buf, addr)
+	_, err := u.pc.WriteTo(buf, u.remoteAddr)
 	return err
 }

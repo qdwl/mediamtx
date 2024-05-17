@@ -21,20 +21,20 @@ type GB28181PublishReq struct {
 type GB28181PublishRes struct {
 	PathName  string `json:"pathName"`
 	UUID      string `json:"uuid"`
-	LocalPort uint16 `json:"localPort"`
+	LocalPort int    `json:"localPort"`
 }
 
 type GB28181PlayReq struct {
 	PathName   string `json:"pathName"`
 	SSRC       string `json:"ssrc"`
 	RemoteIP   string `json:"remoteIp"`
-	RemotePort uint16 `json:"remotePort"`
+	RemotePort int    `json:"remotePort"`
 }
 
 type GB28181PlayRes struct {
 	PathName  string `json:"pathName"`
 	SessionID string `json:"sessionId"`
-	LocalPort uint16 `json:"localPort"`
+	LocalPort int    `json:"localPort"`
 }
 
 type gb28181NewSessionRes struct {
@@ -47,7 +47,8 @@ type gb28181NewSessionReq struct {
 	pathName   string
 	ssrc       string
 	remoteIp   string
-	remotePort uint16
+	remotePort int
+	protocol   string
 	publish    bool
 	res        chan gb28181NewSessionRes
 }

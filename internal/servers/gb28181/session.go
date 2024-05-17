@@ -57,7 +57,7 @@ func (s *session) initialize() {
 	s.ctxCancel = ctxCancel
 	s.created = time.Now()
 	s.uuid = uuid.New()
-	s.conn = gb28181.NewConn(ctx, uint16(s.portPair.RTPPort), s.req.remoteIp, s.req.remotePort, "RTP/AVP")
+	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.protocol)
 	s.chNew = make(chan gb28181NewSessionReq)
 
 	s.Log(logger.Info, "created by %s", s.req.pathName)

@@ -91,7 +91,7 @@ func (s *httpServer) onPublish(ctx *gin.Context) {
 	res1 := GB28181PublishRes{
 		PathName:  res.sx.req.pathName,
 		UUID:      res.sx.uuid.String(),
-		LocalPort: uint16(res.sx.conn.Port()),
+		LocalPort: res.sx.conn.Port(),
 	}
 
 	ctx.JSON(http.StatusOK, &res1)
@@ -122,7 +122,7 @@ func (s *httpServer) onPlay(ctx *gin.Context) {
 	res1 := GB28181PlayRes{
 		PathName:  res.sx.req.pathName,
 		SessionID: res.sx.uuid.String(),
-		LocalPort: uint16(res.sx.conn.Port()),
+		LocalPort: res.sx.conn.Port(),
 	}
 
 	ctx.JSON(http.StatusOK, &res1)

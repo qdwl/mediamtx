@@ -1,8 +1,6 @@
 package transport
 
 import (
-	"net"
-
 	"github.com/pion/rtp"
 )
 
@@ -12,9 +10,7 @@ type PacketProcessor interface {
 
 type Transport interface {
 	Close()
-	IP() net.IP
-	Port() int
-	Write(buf []byte, addr *net.UDPAddr) error
+	Write(buf []byte) error
 }
 
 const (

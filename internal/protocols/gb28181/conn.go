@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
@@ -30,7 +29,7 @@ type trackProbeReq struct {
 }
 
 type Conn struct {
-	port                uint16
+	port                int
 	transport           transport.Transport
 	ctx                 context.Context
 	ctxCancel           func()
@@ -43,7 +42,6 @@ type Conn struct {
 	pts                 uint64
 	dts                 uint64
 	buf                 []byte
-	remoteAddr          *net.UDPAddr
 
 	// in
 	packetChan chan mpeg2.Display
@@ -56,9 +54,9 @@ type Conn struct {
 
 func NewConn(
 	parnteCtx context.Context,
-	port uint16,
+	port int,
 	remoteIp string,
-	remotePort uint16,
+	remotePort int,
 	protocol string,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parnteCtx)
@@ -81,22 +79,20 @@ func NewConn(
 		done:                make(chan struct{}),
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", remoteIp, remotePort))
-	if err != nil {
-		fmt.Println("ResolveUDPAddr failed:", err)
-		return nil
-	}
-	c.remoteAddr = udpAddr
-
 	c.rtpPacketizer = &RtpPacketizer{
 		PayloadType: 98,
 	}
 	c.rtpPacketizer.Init()
 
-	localAddress := fmt.Sprintf(":%d", port)
+	localAddr := fmt.Sprintf(":%d", port)
+	remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
-	if protocol == "RTP/AVP" {
-		c.transport, _ = transport.NewUdpSocket(c, localAddress)
+	if protocol == "UDP" {
+		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
+	} else if protocol == "TCPClient" {
+		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
+	} else if protocol == "TCPServer" {
+		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
 	}
 
 	c.muxer.OnPacket = c.OnMuxPacket
@@ -113,7 +109,7 @@ func (c *Conn) Close() {
 }
 
 func (c *Conn) Port() int {
-	return c.transport.Port()
+	return c.port
 }
 
 func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
@@ -176,7 +172,7 @@ func (c *Conn) OnMuxPacket(pkg []byte) {
 		if err != nil {
 			continue
 		}
-		c.write(c.buf[:n], c.remoteAddr)
+		c.write(c.buf[:n])
 	}
 }
 
@@ -354,9 +350,9 @@ func (c *Conn) Write(sid uint8, frame []byte, pts uint64, dts uint64) {
 	c.muxer.Write(sid, frame, pts, dts)
 }
 
-func (c *Conn) write(buf []byte, addr *net.UDPAddr) error {
+func (c *Conn) write(buf []byte) error {
 	if c.transport != nil {
-		return c.transport.Write(buf, addr)
+		return c.transport.Write(buf)
 	}
 	return nil
 }
