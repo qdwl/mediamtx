@@ -77,9 +77,10 @@ func (s *httpServer) onPublish(ctx *gin.Context) {
 	}
 
 	res := s.parent.newSession(gb28181NewSessionReq{
-		pathName: req.PathName,
-		ssrc:     req.SSRC,
-		publish:  true,
+		pathName:  req.PathName,
+		ssrc:      req.SSRC,
+		publish:   true,
+		transport: req.Transport,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
@@ -111,6 +112,7 @@ func (s *httpServer) onPlay(ctx *gin.Context) {
 		remoteIp:   req.RemoteIP,
 		remotePort: req.RemotePort,
 		publish:    false,
+		transport:  req.Transport,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {

@@ -90,9 +90,9 @@ func NewConn(
 	if protocol == "UDP" {
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
 	} else if protocol == "TCPClient" {
-		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
-	} else if protocol == "TCPServer" {
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
+	} else if protocol == "TCPServer" {
+		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
 	}
 
 	c.muxer.OnPacket = c.OnMuxPacket

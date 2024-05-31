@@ -14,8 +14,9 @@ import (
 )
 
 type GB28181PublishReq struct {
-	PathName string `json:"pathName"`
-	SSRC     string `json:"ssrc"`
+	PathName  string `json:"pathName"`
+	SSRC      string `json:"ssrc"`
+	Transport string `json:"transport"`
 }
 
 type GB28181PublishRes struct {
@@ -29,6 +30,7 @@ type GB28181PlayReq struct {
 	SSRC       string `json:"ssrc"`
 	RemoteIP   string `json:"remoteIp"`
 	RemotePort int    `json:"remotePort"`
+	Transport  string `json:"transport"`
 }
 
 type GB28181PlayRes struct {
@@ -48,7 +50,7 @@ type gb28181NewSessionReq struct {
 	ssrc       string
 	remoteIp   string
 	remotePort int
-	protocol   string
+	transport  string
 	publish    bool
 	res        chan gb28181NewSessionRes
 }

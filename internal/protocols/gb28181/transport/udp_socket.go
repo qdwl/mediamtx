@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 	"github.com/pion/rtp"
 )
 
@@ -30,13 +31,13 @@ func NewUdpSocket(
 		return nil, fmt.Errorf("remote address fmt error")
 	}
 
-	tmp, err := net.ListenPacket("udp", localAddr)
+	tmp, err := net.ListenPacket(restrictnetwork.Restrict("udp", localAddr))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listen udp server %s failed", localAddr)
 	}
 
 	pc = tmp.(*net.UDPConn)
-	err = pc.SetReadBuffer(udpKernelReadBufferSize)
+	err = pc.SetReadBuffer(kernelReadBufferSize)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +63,8 @@ func (u *UdpSocket) Close() {
 func (u *UdpSocket) runReader() {
 	defer close(u.done)
 
+	buf := make([]byte, maxPacketSize)
 	for {
-		buf := make([]byte, maxPacketSize)
 		n, _, err := u.pc.ReadFromUDP(buf)
 		if err != nil {
 			break
