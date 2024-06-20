@@ -46,8 +46,6 @@ type session struct {
 	conn       *gb28181.Conn
 	vcid       uint8
 	acid       uint8
-
-	chNew chan gb28181NewSessionReq
 }
 
 func (s *session) initialize() {
@@ -58,7 +56,6 @@ func (s *session) initialize() {
 	s.created = time.Now()
 	s.uuid = uuid.New()
 	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport)
-	s.chNew = make(chan gb28181NewSessionReq)
 
 	s.Log(logger.Info, "created by %s", s.req.pathName)
 
@@ -69,6 +66,10 @@ func (s *session) initialize() {
 func (s *session) Log(level logger.Level, format string, args ...interface{}) {
 	id := hex.EncodeToString(s.uuid[:4])
 	s.parent.Log(level, "[session %v] "+format, append([]interface{}{id}, args...)...)
+}
+
+func (s *session) Update(req gb28181UpdateSessionReq) {
+
 }
 
 func (s *session) Close() {
@@ -98,10 +99,13 @@ func (s *session) run() {
 }
 
 func (s *session) runInner() (int, error) {
-	if s.req.publish {
+	if s.req.direction == "recvonly" {
 		return s.runPublish()
+	} else if s.req.direction == "sendonly" {
+		return s.runRead()
+	} else {
+		return 0, fmt.Errorf("unsupport direction")
 	}
-	return s.runRead()
 }
 
 func (s *session) runPublish() (int, error) {

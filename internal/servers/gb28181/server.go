@@ -13,30 +13,26 @@ import (
 	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
-type GB28181PublishReq struct {
-	PathName  string `json:"pathName"`
-	SSRC      string `json:"ssrc"`
-	Transport string `json:"transport"`
-}
-
-type GB28181PublishRes struct {
-	PathName  string `json:"pathName"`
-	UUID      string `json:"uuid"`
-	LocalPort int    `json:"localPort"`
-}
-
-type GB28181PlayReq struct {
+type GB28181CreateReq struct {
 	PathName   string `json:"pathName"`
 	SSRC       string `json:"ssrc"`
 	RemoteIP   string `json:"remoteIp"`
 	RemotePort int    `json:"remotePort"`
 	Transport  string `json:"transport"`
+	Direction  string `json:"direction"`
 }
 
-type GB28181PlayRes struct {
+type GB28181CreateRes struct {
 	PathName  string `json:"pathName"`
 	SessionID string `json:"sessionId"`
 	LocalPort int    `json:"localPort"`
+}
+
+type GB28181UpdateReq struct {
+	PathName   string `json:"pathName"`
+	SSRC       string `json:"ssrc"`
+	RemoteIP   string `json:"remoteIp"`
+	RemotePort int    `json:"remotePort"`
 }
 
 type gb28181NewSessionRes struct {
@@ -51,8 +47,22 @@ type gb28181NewSessionReq struct {
 	remoteIp   string
 	remotePort int
 	transport  string
-	publish    bool
+	direction  string
 	res        chan gb28181NewSessionRes
+}
+
+type gb28181UpdateSessionRes struct {
+	err           error
+	errStatusCode int
+}
+
+type gb28181UpdateSessionReq struct {
+	pathName   string
+	sessionId  string
+	ssrc       string
+	remoteIp   string
+	remotePort int
+	res        chan gb28181UpdateSessionRes
 }
 
 type gb28181DeleteSessionRes struct {
@@ -61,8 +71,8 @@ type gb28181DeleteSessionRes struct {
 }
 
 type gb28181DeleteSessionReq struct {
-	uuid string
-	res  chan gb28181DeleteSessionRes
+	sessionId string
+	res       chan gb28181DeleteSessionRes
 }
 
 type PortPair struct {
@@ -103,6 +113,7 @@ type Server struct {
 
 	// in
 	chNewSession    chan gb28181NewSessionReq
+	chUpdateSession chan gb28181UpdateSessionReq
 	chDeleteSession chan gb28181DeleteSessionReq
 	chCloseSession  chan *session
 
@@ -119,6 +130,7 @@ func (s *Server) Initialize() error {
 	s.sessions = make(map[string]*session)
 	s.portPairs = make([]PortPair, 0)
 	s.chNewSession = make(chan gb28181NewSessionReq)
+	s.chUpdateSession = make(chan gb28181UpdateSessionReq)
 	s.chDeleteSession = make(chan gb28181DeleteSessionReq)
 	s.chCloseSession = make(chan *session)
 	s.done = make(chan struct{})
@@ -199,8 +211,22 @@ outer:
 				}
 			}
 
+		case req := <-s.chUpdateSession:
+			sx, ok := s.sessions[req.sessionId]
+			if !ok {
+				req.res <- gb28181UpdateSessionRes{
+					err:           errors.New("session not exist"),
+					errStatusCode: http.StatusNotFound,
+				}
+			} else {
+				sx.Update(req)
+				req.res <- gb28181UpdateSessionRes{
+					errStatusCode: http.StatusOK,
+				}
+			}
+
 		case req := <-s.chDeleteSession:
-			sx, ok := s.sessions[req.uuid]
+			sx, ok := s.sessions[req.sessionId]
 			if !ok {
 				req.res <- gb28181DeleteSessionRes{
 					err:           errors.New("session not exist"),
@@ -250,6 +276,23 @@ func (s *Server) newSession(req gb28181NewSessionReq) gb28181NewSessionRes {
 
 	case <-s.ctx.Done():
 		return gb28181NewSessionRes{
+			err:           fmt.Errorf("terminated"),
+			errStatusCode: http.StatusInternalServerError,
+		}
+	}
+}
+
+// updateSession is called by gb28181HTTPServer.
+func (s *Server) updateSession(req gb28181UpdateSessionReq) gb28181UpdateSessionRes {
+	req.res = make(chan gb28181UpdateSessionRes)
+
+	select {
+	case s.chUpdateSession <- req:
+		res := <-req.res
+		return res
+
+	case <-s.ctx.Done():
+		return gb28181UpdateSessionRes{
 			err:           fmt.Errorf("terminated"),
 			errStatusCode: http.StatusInternalServerError,
 		}

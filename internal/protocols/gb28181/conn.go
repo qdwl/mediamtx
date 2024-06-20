@@ -87,11 +87,11 @@ func NewConn(
 	localAddr := fmt.Sprintf(":%d", port)
 	remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
-	if protocol == "UDP" {
+	if protocol == "udp" {
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
-	} else if protocol == "TCPClient" {
+	} else if protocol == "tcpclient" {
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
-	} else if protocol == "TCPServer" {
+	} else if protocol == "tcpserver" {
 		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
 	}
 

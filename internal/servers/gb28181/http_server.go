@@ -3,6 +3,7 @@ package gb28181
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
@@ -38,9 +39,9 @@ func (s *httpServer) initialize() error {
 
 	router := gin.New()
 	router.SetTrustedProxies(s.trustedProxies.ToTrustedProxies()) //nolint:errcheck
-	router.POST("/gb28181/publish", s.onPublish)
-	router.POST("/gb28181/play", s.onPlay)
-	router.DELETE("/gb28181/:id", s.onDelete)
+	router.POST("/gb28181/:id", s.onCreateStream)
+	router.PUT("/gb28181/:id", s.onUpdateStream)
+	router.DELETE("/gb28181/:id", s.onDeleteStream)
 	network, address := restrictnetwork.Restrict("tcp", s.address)
 
 	var err error
@@ -68,38 +69,8 @@ func (s *httpServer) close() {
 	s.inner.Close()
 }
 
-func (s *httpServer) onPublish(ctx *gin.Context) {
-	req := GB28181PublishReq{}
-
-	if err := ctx.ShouldBind(&req); err != nil {
-		ctx.Writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	res := s.parent.newSession(gb28181NewSessionReq{
-		pathName:  req.PathName,
-		ssrc:      req.SSRC,
-		publish:   true,
-		transport: req.Transport,
-	})
-	if res.err != nil {
-		if res.errStatusCode != 0 {
-			ctx.Writer.WriteHeader(res.errStatusCode)
-		}
-		return
-	}
-
-	res1 := GB28181PublishRes{
-		PathName:  res.sx.req.pathName,
-		UUID:      res.sx.uuid.String(),
-		LocalPort: res.sx.conn.Port(),
-	}
-
-	ctx.JSON(http.StatusOK, &res1)
-}
-
-func (s *httpServer) onPlay(ctx *gin.Context) {
-	req := GB28181PlayReq{}
+func (s *httpServer) onCreateStream(ctx *gin.Context) {
+	req := GB28181CreateReq{}
 
 	if err := ctx.ShouldBind(&req); err != nil {
 		ctx.Writer.WriteHeader(http.StatusBadRequest)
@@ -111,8 +82,8 @@ func (s *httpServer) onPlay(ctx *gin.Context) {
 		ssrc:       req.SSRC,
 		remoteIp:   req.RemoteIP,
 		remotePort: req.RemotePort,
-		publish:    false,
-		transport:  req.Transport,
+		direction:  strings.ToLower(req.Direction),
+		transport:  strings.ToLower(req.Transport),
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
@@ -121,7 +92,7 @@ func (s *httpServer) onPlay(ctx *gin.Context) {
 		return
 	}
 
-	res1 := GB28181PlayRes{
+	res1 := GB28181CreateRes{
 		PathName:  res.sx.req.pathName,
 		SessionID: res.sx.uuid.String(),
 		LocalPort: res.sx.conn.Port(),
@@ -130,11 +101,37 @@ func (s *httpServer) onPlay(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, &res1)
 }
 
-func (s *httpServer) onDelete(ctx *gin.Context) {
-	uuid := ctx.Param("id")
+func (s *httpServer) onUpdateStream(ctx *gin.Context) {
+	sessionId := ctx.Param("id")
+
+	req := GB28181UpdateReq{}
+	if err := ctx.ShouldBind(&req); err != nil {
+		ctx.Writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	res := s.parent.updateSession(gb28181UpdateSessionReq{
+		pathName:   req.PathName,
+		ssrc:       req.SSRC,
+		sessionId:  sessionId,
+		remoteIp:   req.RemoteIP,
+		remotePort: req.RemotePort,
+	})
+	if res.err != nil {
+		if res.errStatusCode != 0 {
+			ctx.Writer.WriteHeader(res.errStatusCode)
+		}
+		return
+	}
+
+	ctx.Writer.WriteHeader(http.StatusOK)
+}
+
+func (s *httpServer) onDeleteStream(ctx *gin.Context) {
+	sessionId := ctx.Param("id")
 
 	res := s.parent.deleteSession(gb28181DeleteSessionReq{
-		uuid: uuid,
+		sessionId: sessionId,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
