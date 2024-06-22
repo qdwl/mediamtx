@@ -30,6 +30,7 @@ type trackProbeReq struct {
 
 type Conn struct {
 	port                int
+	protocol            string
 	transport           transport.Transport
 	ctx                 context.Context
 	ctxCancel           func()
@@ -63,6 +64,7 @@ func NewConn(
 
 	c := &Conn{
 		port:                port,
+		protocol:            protocol,
 		ctx:                 ctx,
 		ctxCancel:           ctxCancel,
 		muxer:               mpeg2.NewPsMuxer(),
@@ -92,7 +94,7 @@ func NewConn(
 	} else if protocol == "tcpclient" {
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
 	} else if protocol == "tcpserver" {
-		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
+		c.transport = nil
 	}
 
 	c.muxer.OnPacket = c.OnMuxPacket
@@ -106,6 +108,15 @@ func NewConn(
 func (c *Conn) Close() {
 	c.ctxCancel()
 	<-c.done
+}
+
+func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
+	if c.protocol == "tcpserver" {
+		localAddr := fmt.Sprintf(":%d", c.port)
+		remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
+
+		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
+	}
 }
 
 func (c *Conn) Port() int {
@@ -195,8 +206,6 @@ func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts u
 
 func (c *Conn) run() {
 	defer close(c.done)
-	defer c.transport.Close()
-
 	fmt.Println("GB281818 conn run")
 
 	func() {
@@ -224,6 +233,10 @@ func (c *Conn) run() {
 			}
 		}
 	}()
+
+	if c.transport != nil {
+		c.transport.Close()
+	}
 
 	fmt.Println("GB281818 conn exit")
 }

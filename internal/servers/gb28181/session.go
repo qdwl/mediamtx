@@ -69,7 +69,7 @@ func (s *session) Log(level logger.Level, format string, args ...interface{}) {
 }
 
 func (s *session) Update(req gb28181UpdateSessionReq) {
-
+	s.conn.SetRemoteAddr(req.remoteIp, req.remotePort)
 }
 
 func (s *session) Close() {
