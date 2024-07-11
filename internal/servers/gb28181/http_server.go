@@ -39,7 +39,7 @@ func (s *httpServer) initialize() error {
 
 	router := gin.New()
 	router.SetTrustedProxies(s.trustedProxies.ToTrustedProxies()) //nolint:errcheck
-	router.POST("/gb28181/:id", s.onCreateStream)
+	router.POST("/gb28181", s.onCreateStream)
 	router.PUT("/gb28181/:id", s.onUpdateStream)
 	router.DELETE("/gb28181/:id", s.onDeleteStream)
 	network, address := restrictnetwork.Restrict("tcp", s.address)
@@ -83,7 +83,7 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 		remoteIp:   req.RemoteIP,
 		remotePort: req.RemotePort,
 		direction:  strings.ToLower(req.Direction),
-		transport:  strings.ToLower(req.Transport),
+		transport:  req.Transport,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {

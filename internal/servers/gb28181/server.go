@@ -18,7 +18,7 @@ type GB28181CreateReq struct {
 	SSRC       string `json:"ssrc"`
 	RemoteIP   string `json:"remoteIp"`
 	RemotePort int    `json:"remotePort"`
-	Transport  string `json:"transport"`
+	Transport  int    `json:"transport"`
 	Direction  string `json:"direction"`
 }
 
@@ -46,7 +46,7 @@ type gb28181NewSessionReq struct {
 	ssrc       string
 	remoteIp   string
 	remotePort int
-	transport  string
+	transport  int
 	direction  string
 	res        chan gb28181NewSessionRes
 }

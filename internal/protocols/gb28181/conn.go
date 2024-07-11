@@ -13,6 +13,12 @@ import (
 	"github.com/yapingcat/gomedia/mpeg2"
 )
 
+const (
+	UdpSocket int = 1
+	TcpClient int = 2
+	TcpServer int = 3
+)
+
 type PsFrame struct {
 	Frame []byte
 	CID   mpeg2.PS_STREAM_TYPE
@@ -30,7 +36,7 @@ type trackProbeReq struct {
 
 type Conn struct {
 	port                int
-	protocol            string
+	protocol            int
 	transport           transport.Transport
 	ctx                 context.Context
 	ctxCancel           func()
@@ -58,7 +64,7 @@ func NewConn(
 	port int,
 	remoteIp string,
 	remotePort int,
-	protocol string,
+	protocol int,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parnteCtx)
 
@@ -89,11 +95,11 @@ func NewConn(
 	localAddr := fmt.Sprintf(":%d", port)
 	remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
-	if protocol == "udp" {
+	if protocol == UdpSocket {
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
-	} else if protocol == "tcpclient" {
+	} else if protocol == TcpClient {
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
-	} else if protocol == "tcpserver" {
+	} else if protocol == TcpServer {
 		c.transport = nil
 	}
 
@@ -111,7 +117,7 @@ func (c *Conn) Close() {
 }
 
 func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
-	if c.protocol == "tcpserver" {
+	if c.protocol == TcpServer {
 		localAddr := fmt.Sprintf(":%d", c.port)
 		remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
