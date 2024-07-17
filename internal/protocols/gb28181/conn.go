@@ -319,27 +319,30 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 	case *mpeg2.PesPacket:
 		count := 0
 		for _, track := range c.tracks {
-			if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_AAC {
-				if track, ok := c.tracks[uint8(mpeg2.PS_STREAM_AAC)]; ok {
-					var adtsPkts mpeg4audio.ADTSPackets
-					err := adtsPkts.Unmarshal(value.Pes_payload)
-					if err != nil {
-						continue
-					}
+			if track.StreamId == value.Stream_id {
+				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_AAC {
+					if track, ok := c.tracks[uint8(mpeg2.PS_STREAM_AAC)]; ok {
+						var adtsPkts mpeg4audio.ADTSPackets
+						err := adtsPkts.Unmarshal(value.Pes_payload)
+						if err != nil {
+							continue
+						}
 
-					pkt := adtsPkts[0]
-					conf := &mpeg4audio.Config{
-						Type:         pkt.Type,
-						SampleRate:   pkt.SampleRate,
-						ChannelCount: pkt.ChannelCount,
-					}
+						pkt := adtsPkts[0]
+						conf := &mpeg4audio.Config{
+							Type:         pkt.Type,
+							SampleRate:   pkt.SampleRate,
+							ChannelCount: pkt.ChannelCount,
+						}
 
-					track.Codec = &mpegps.CodecMPEG4Audio{
-						Config: *conf,
+						track.Codec = &mpegps.CodecMPEG4Audio{
+							Config: *conf,
+						}
+						track.Complete = true
 					}
-					track.Complete = true
 				}
 			}
+
 			if track.Complete {
 				count++
 			}
