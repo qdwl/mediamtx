@@ -229,7 +229,9 @@ func (c *Conn) run() {
 				}
 				if c.trackGatherComplete {
 					for _, track := range c.tracks {
-						res.tracks = append(res.tracks, track)
+						if track.Complete {
+							res.tracks = append(res.tracks, track)
+						}
 					}
 				}
 				req.resChan <- res
@@ -267,6 +269,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamType: uint8(mpeg2.PS_STREAM_H264),
 						Codec:      &mpegps.CodecH264{},
 						Complete:   true,
+						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_H264)] = track
 				}
@@ -278,6 +281,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamType: uint8(mpeg2.PS_STREAM_H265),
 						Codec:      &mpegps.CodecH265{},
 						Complete:   true,
+						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_H264)] = track
 				}
@@ -288,6 +292,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamId:   es.Elementary_stream_id,
 						StreamType: uint8(mpeg2.PS_STREAM_AAC),
 						Complete:   false,
+						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_AAC)] = track
 				}
@@ -299,6 +304,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamType: uint8(mpeg2.PS_STREAM_G711A),
 						Codec:      &mpegps.CodecG711A{},
 						Complete:   true,
+						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_G711A)] = track
 				}
@@ -310,6 +316,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamType: uint8(mpeg2.PS_STREAM_G711U),
 						Codec:      &mpegps.CodecG711U{},
 						Complete:   true,
+						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_G711U)] = track
 				}
@@ -341,9 +348,10 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						track.Complete = true
 					}
 				}
+				track.Updated = time.Now()
 			}
 
-			if track.Complete {
+			if track.Complete || track.Updated.Add(time.Second).Before(time.Now()) {
 				count++
 			}
 		}
