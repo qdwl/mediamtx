@@ -88,7 +88,7 @@ func NewConn(
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
-		PayloadType: 98,
+		PayloadType: 96,
 	}
 	c.rtpPacketizer.Init()
 
@@ -183,6 +183,7 @@ func (c *Conn) OnMuxPacket(pkg []byte) {
 	if err != nil {
 		return
 	}
+	fmt.Printf("OnMuxPacket:%d\n", c.pts)
 
 	for _, pkt := range pkts {
 		n, err := pkt.MarshalTo(c.buf)

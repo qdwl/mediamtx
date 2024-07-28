@@ -163,6 +163,7 @@ func (s *session) runPublish() (int, error) {
 					return
 				}
 
+				s.Log(logger.Info, "h264 pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.H264{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -243,6 +244,7 @@ func (s *session) runPublish() (int, error) {
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {
+				s.Log(logger.Info, "g711a pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -264,6 +266,7 @@ func (s *session) runPublish() (int, error) {
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {
+				s.Log(logger.Info, "g711u pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -320,17 +323,34 @@ func (s *session) runRead() (int, error) {
 
 	s.writeAnswer()
 
-	<-time.After(10 * time.Second)
+	var path defs.Path
+	var stream *stream.Stream
 
-	path, stream, err := s.pathManager.AddReader(defs.PathAddReaderReq{
-		Author: s,
-		AccessRequest: defs.PathAccessRequest{
-			Name:     s.req.pathName,
-			SkipAuth: true,
-		},
-	})
-	if err != nil {
-		return 0, err
+	ctx, ctxCancel := context.WithTimeout(s.ctx, 10*time.Second)
+	defer ctxCancel()
+
+	ticker := time.NewTicker(time.Duration(10) * time.Millisecond)
+	for {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-ticker.C:
+		}
+		path, stream, err = s.pathManager.AddReader(defs.PathAddReaderReq{
+			Author: s,
+			AccessRequest: defs.PathAccessRequest{
+				Name:     s.req.pathName,
+				SkipAuth: true,
+			},
+		})
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, defs.PathNoOnePublishingError{
+			PathName: s.req.pathName,
+		}) {
+			return 0, err
+		}
 	}
 	defer path.RemoveReader(defs.PathRemoveReaderReq{Author: s})
 
@@ -425,6 +445,8 @@ func (s *session) setupVideo(
 					return err
 				}
 			}
+
+			s.Log(logger.Info, "writeH264 pts:%d, dts:%d", tunit.PTS.Milliseconds(), dts.Milliseconds())
 
 			return s.writeH264(tunit.PTS, dts, idrPresent, tunit.AU)
 		})
@@ -524,20 +546,20 @@ func (s *session) setupAudio(
 
 func (s *session) writeH264(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
 	for _, u := range au {
-		s.conn.Write(s.vcid, u, uint64(pts), uint64(dts))
+		s.conn.Write(s.vcid, u, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
 	}
 	return nil
 }
 
 func (s *session) writeH265(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
 	for _, u := range au {
-		s.conn.Write(s.vcid, u, uint64(pts), uint64(dts))
+		s.conn.Write(s.vcid, u, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
 	}
 	return nil
 }
 
 func (s *session) WriteMPEG4Audio(pts time.Duration, au []byte) error {
-	s.conn.Write(s.acid, au, uint64(pts), uint64(pts))
+	s.conn.Write(s.acid, au, uint64(pts.Milliseconds()), uint64(pts.Milliseconds()))
 	return nil
 }
 
