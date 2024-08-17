@@ -10,7 +10,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/mpegps"
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/transport"
 	"github.com/pion/rtp"
-	"github.com/yapingcat/gomedia/mpeg2"
+	mpeg2 "github.com/qdwl/mpegps"
 )
 
 const (
@@ -178,12 +178,11 @@ func (c *Conn) OnDemuxPacket(pkg mpeg2.Display, decodeResult error) {
 	}
 }
 
-func (c *Conn) OnMuxPacket(pkg []byte) {
-	pkts, err := c.rtpPacketizer.Encode(pkg, uint32(c.pts))
+func (c *Conn) OnMuxPacket(pkg []byte, ts uint64) {
+	pkts, err := c.rtpPacketizer.Encode(pkg, uint32(ts))
 	if err != nil {
 		return
 	}
-	fmt.Printf("OnMuxPacket:%d\n", c.pts)
 
 	for _, pkt := range pkts {
 		n, err := pkt.MarshalTo(c.buf)

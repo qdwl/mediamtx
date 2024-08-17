@@ -23,7 +23,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/unit"
 	"github.com/google/uuid"
-	"github.com/yapingcat/gomedia/mpeg2"
+	mpeg2 "github.com/qdwl/mpegps"
 )
 
 var errNoSupportedCodecs = errors.New(
@@ -163,7 +163,6 @@ func (s *session) runPublish() (int, error) {
 					return
 				}
 
-				s.Log(logger.Info, "h264 pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.H264{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -244,7 +243,6 @@ func (s *session) runPublish() (int, error) {
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {
-				s.Log(logger.Info, "g711a pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -266,7 +264,6 @@ func (s *session) runPublish() (int, error) {
 			}
 
 			mediaCallbacks[track.StreamType] = func(pts time.Duration, data []byte) {
-				s.Log(logger.Info, "g711u pts:%d", pts.Milliseconds())
 				stream.WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
@@ -446,8 +443,6 @@ func (s *session) setupVideo(
 				}
 			}
 
-			s.Log(logger.Info, "writeH264 pts:%d, dts:%d", tunit.PTS.Milliseconds(), dts.Milliseconds())
-
 			return s.writeH264(tunit.PTS, dts, idrPresent, tunit.AU)
 		})
 
@@ -545,16 +540,24 @@ func (s *session) setupAudio(
 }
 
 func (s *session) writeH264(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
-	for _, u := range au {
-		s.conn.Write(s.vcid, u, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
+	enc, err := h264.AnnexBMarshal(au)
+	if err != nil {
+		return err
 	}
+
+	s.conn.Write(s.vcid, enc, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
+
 	return nil
 }
 
 func (s *session) writeH265(pts time.Duration, dts time.Duration, idrPresent bool, au [][]byte) error {
-	for _, u := range au {
-		s.conn.Write(s.vcid, u, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
+	enc, err := h264.AnnexBMarshal(au)
+	if err != nil {
+		return err
 	}
+
+	s.conn.Write(s.vcid, enc, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
+
 	return nil
 }
 

@@ -83,12 +83,13 @@ func (e *RtpPacketizer) Encode(nalu []byte, ts uint32) ([]*rtp.Packet, error) {
 
 	le := e.PayloadMaxSize
 	for i := range rets {
+		if len(nalu) < le {
+			le = len(nalu)
+		}
 
 		data := make([]byte, le)
 		copy(data, nalu)
-		if len(nalu) > le {
-			nalu = nalu[le:]
-		}
+		nalu = nalu[le:]
 
 		rets[i] = &rtp.Packet{
 			Header: rtp.Header{

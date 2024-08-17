@@ -1,6 +1,8 @@
 module github.com/bluenviron/mediamtx
 
-go 1.21
+go 1.22.3
+
+toolchain go1.22.5
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0
@@ -67,6 +69,7 @@ require (
 	github.com/pion/transport/v2 v2.2.3 // indirect
 	github.com/pion/turn/v2 v2.1.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
