@@ -362,109 +362,130 @@ func (m *muxer) writeTracks(videoTrack format.Format, audioTrack format.Format) 
 		return err
 	}
 
+	var count int = 0
+
 	if videoTrack, ok := videoTrack.(*format.H264); ok {
-		// write decoder config only if SPS and PPS are available.
-		if sps, pps := videoTrack.SafeParams(); sps != nil && pps != nil {
-			buf, _ := h264conf.Conf{
-				SPS: sps,
-				PPS: pps,
-			}.Marshal()
+		count = 0
+		for {
+			// write decoder config only if SPS and PPS are available.
+			if sps, pps := videoTrack.SafeParams(); sps != nil && pps != nil {
+				buf, _ := h264conf.Conf{
+					SPS: sps,
+					PPS: pps,
+				}.Marshal()
 
-			tag := flvio.Tag{
-				Type:          flvio.TAG_VIDEO,
-				FrameType:     flvio.FRAME_KEY,
-				AVCPacketType: flvio.AVC_SEQHDR,
-				VideoFormat:   flvio.VIDEO_H264,
-				Data:          buf,
-				Time:          uint32(flvio.TimeToTs(0)),
-			}
+				tag := flvio.Tag{
+					Type:          flvio.TAG_VIDEO,
+					FrameType:     flvio.FRAME_KEY,
+					AVCPacketType: flvio.AVC_SEQHDR,
+					VideoFormat:   flvio.VIDEO_H264,
+					Data:          buf,
+					Time:          uint32(flvio.TimeToTs(0)),
+				}
 
-			if err := m.conn.writeTag(tag); err != nil {
-				return err
+				if err := m.conn.writeTag(tag); err != nil {
+					return err
+				} else {
+					break
+				}
+			} else {
+				count++
+				time.Sleep(10 * time.Millisecond)
+				if count > 100 {
+					return errors.New("vps sps or pps are not avaiable")
+				}
 			}
-		} else {
-			return errors.New("sps or pps are not avaiable")
 		}
+
 	}
 
 	if videoTrack, ok := videoTrack.(*format.H265); ok {
 		// write decoder config only if VPS SPS and PPS are available.
-		if vps, sps, pps := videoTrack.SafeParams(); vps != nil && sps != nil && pps != nil {
-			var spsp h265.SPS
-			err := spsp.Unmarshal(sps)
-			if err != nil {
-				return errors.New("vps sps or pps are not avaiable")
-			}
+		count = 0
+		for {
+			if vps, sps, pps := videoTrack.SafeParams(); vps != nil && sps != nil && pps != nil {
+				var spsp h265.SPS
+				err := spsp.Unmarshal(sps)
+				if err != nil {
+					return errors.New("vps sps or pps are not avaiable")
+				}
 
-			hvcc := &mp4.HvcC{
-				ConfigurationVersion:        1,
-				GeneralProfileIdc:           spsp.ProfileTierLevel.GeneralProfileIdc,
-				GeneralProfileCompatibility: spsp.ProfileTierLevel.GeneralProfileCompatibilityFlag,
-				GeneralConstraintIndicator: [6]uint8{
-					sps[7], sps[8], sps[9], sps[10], sps[11], sps[12],
-				},
-				GeneralLevelIdc: spsp.ProfileTierLevel.GeneralLevelIdc,
-				// MinSpatialSegmentationIdc
-				// ParallelismType
-				ChromaFormatIdc:      uint8(spsp.ChromaFormatIdc),
-				BitDepthLumaMinus8:   uint8(spsp.BitDepthLumaMinus8),
-				BitDepthChromaMinus8: uint8(spsp.BitDepthChromaMinus8),
-				// AvgFrameRate
-				// ConstantFrameRate
-				NumTemporalLayers: 1,
-				// TemporalIdNested
-				LengthSizeMinusOne: 3,
-				NumOfNaluArrays:    3,
-				NaluArrays: []mp4.HEVCNaluArray{
-					{
-						NaluType: byte(h265.NALUType_VPS_NUT),
-						NumNalus: 1,
-						Nalus: []mp4.HEVCNalu{{
-							Length:  uint16(len(vps)),
-							NALUnit: vps,
-						}},
+				hvcc := &mp4.HvcC{
+					ConfigurationVersion:        1,
+					GeneralProfileIdc:           spsp.ProfileTierLevel.GeneralProfileIdc,
+					GeneralProfileCompatibility: spsp.ProfileTierLevel.GeneralProfileCompatibilityFlag,
+					GeneralConstraintIndicator: [6]uint8{
+						sps[7], sps[8], sps[9], sps[10], sps[11], sps[12],
 					},
-					{
-						NaluType: byte(h265.NALUType_SPS_NUT),
-						NumNalus: 1,
-						Nalus: []mp4.HEVCNalu{{
-							Length:  uint16(len(sps)),
-							NALUnit: sps,
-						}},
+					GeneralLevelIdc: spsp.ProfileTierLevel.GeneralLevelIdc,
+					// MinSpatialSegmentationIdc
+					// ParallelismType
+					ChromaFormatIdc:      uint8(spsp.ChromaFormatIdc),
+					BitDepthLumaMinus8:   uint8(spsp.BitDepthLumaMinus8),
+					BitDepthChromaMinus8: uint8(spsp.BitDepthChromaMinus8),
+					// AvgFrameRate
+					// ConstantFrameRate
+					NumTemporalLayers: 1,
+					// TemporalIdNested
+					LengthSizeMinusOne: 3,
+					NumOfNaluArrays:    3,
+					NaluArrays: []mp4.HEVCNaluArray{
+						{
+							NaluType: byte(h265.NALUType_VPS_NUT),
+							NumNalus: 1,
+							Nalus: []mp4.HEVCNalu{{
+								Length:  uint16(len(vps)),
+								NALUnit: vps,
+							}},
+						},
+						{
+							NaluType: byte(h265.NALUType_SPS_NUT),
+							NumNalus: 1,
+							Nalus: []mp4.HEVCNalu{{
+								Length:  uint16(len(sps)),
+								NALUnit: sps,
+							}},
+						},
+						{
+							NaluType: byte(h265.NALUType_PPS_NUT),
+							NumNalus: 1,
+							Nalus: []mp4.HEVCNalu{{
+								Length:  uint16(len(pps)),
+								NALUnit: pps,
+							}},
+						},
 					},
-					{
-						NaluType: byte(h265.NALUType_PPS_NUT),
-						NumNalus: 1,
-						Nalus: []mp4.HEVCNalu{{
-							Length:  uint16(len(pps)),
-							NALUnit: pps,
-						}},
-					},
-				},
-			}
+				}
 
-			var buf bytes.Buffer
-			_, err = mp4.Marshal(&buf, hvcc, mp4.Context{})
-			if err != nil {
-				return errors.New("vps sps or pps are not avaiable")
-			}
+				var buf bytes.Buffer
+				_, err = mp4.Marshal(&buf, hvcc, mp4.Context{})
+				if err != nil {
+					return errors.New("vps sps or pps are not avaiable")
+				}
 
-			tag := flvio.Tag{
-				Type:          flvio.TAG_VIDEO,
-				FrameType:     flvio.FRAME_KEY,
-				AVCPacketType: flvio.AVC_SEQHDR,
-				VideoFormat:   flvio.VIDEO_H265,
-				Data:          buf.Bytes(),
-				Time:          uint32(flvio.TimeToTs(0)),
-			}
+				tag := flvio.Tag{
+					Type:          flvio.TAG_VIDEO,
+					FrameType:     flvio.FRAME_KEY,
+					AVCPacketType: flvio.AVC_SEQHDR,
+					VideoFormat:   flvio.VIDEO_H265,
+					Data:          buf.Bytes(),
+					Time:          uint32(flvio.TimeToTs(0)),
+				}
 
-			m.Log(logger.Info, "write video track ts:%d", tag.Time)
+				m.Log(logger.Info, "write video track ts:%d", tag.Time)
 
-			if err := m.conn.writeTag(tag); err != nil {
-				return err
+				if err := m.conn.writeTag(tag); err != nil {
+					return err
+				} else {
+					break
+				}
+			} else {
+				count++
+				time.Sleep(10 * time.Millisecond)
+				if count > 100 {
+					return errors.New("vps sps or pps are not avaiable")
+				}
 			}
-		} else {
-			return errors.New("vps sps or pps are not avaiable")
 		}
 	}
 
@@ -563,8 +584,6 @@ func (m *muxer) writeH265(pts time.Duration, dts time.Duration, idrPresent bool,
 		Data:          avcc,
 	}
 
-	m.Log(logger.Info, "writeH265 ts:%d", tag.Time)
-
 	if err := m.conn.writeTag(tag); err != nil {
 		return err
 	}
@@ -583,8 +602,6 @@ func (m *muxer) WriteMPEG4Audio(pts time.Duration, au []byte) error {
 		Data:          au,
 		Time:          uint32(flvio.TimeToTs(pts)),
 	}
-
-	m.Log(logger.Info, "WriteMPEG4Audio ts:%d", tag.Time)
 
 	if err := m.conn.writeTag(tag); err != nil {
 		return err

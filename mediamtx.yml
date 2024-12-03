@@ -675,3 +675,10 @@ paths:
   # Settings under path "all_others" are applied to all paths that
   # do not match another entry.
   all_others:
+
+  "livestream":
+    # If path name is a regular expression, $G1, G2, etc will be replaced
+    # with regular expression groups.
+    # rtmp://10.129.127.188:26035/video/http-623261-1709202561-9
+    source: rtsp://admin:hk123456@10.129.126.210/Streaming/Channels/1
+    sourceOnDemand: yes
