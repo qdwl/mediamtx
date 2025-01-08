@@ -391,7 +391,7 @@ func (m *muxer) writeTracks(videoTrack format.Format, audioTrack format.Format) 
 			} else {
 				count++
 				time.Sleep(10 * time.Millisecond)
-				if count > 100 {
+				if count > 300 {
 					return errors.New("vps sps or pps are not avaiable")
 				}
 			}
@@ -482,7 +482,7 @@ func (m *muxer) writeTracks(videoTrack format.Format, audioTrack format.Format) 
 			} else {
 				count++
 				time.Sleep(10 * time.Millisecond)
-				if count > 100 {
+				if count > 300 {
 					return errors.New("vps sps or pps are not avaiable")
 				}
 			}
