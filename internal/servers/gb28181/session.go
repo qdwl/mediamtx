@@ -544,9 +544,7 @@ func (s *session) writeH264(pts time.Duration, dts time.Duration, idrPresent boo
 	if err != nil {
 		return err
 	}
-
 	s.conn.Write(s.vcid, enc, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
-
 	return nil
 }
 
@@ -557,7 +555,6 @@ func (s *session) writeH265(pts time.Duration, dts time.Duration, idrPresent boo
 	}
 
 	s.conn.Write(s.vcid, enc, uint64(pts.Milliseconds()), uint64(dts.Milliseconds()))
-
 	return nil
 }
 
