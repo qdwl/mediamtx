@@ -70,11 +70,6 @@ func NewConn(
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parnteCtx)
 
-	file, err := os.Create("example.ps")
-	if err != nil {
-		fmt.Printf("create ps filed failed:%s\n", err.Error())
-	}
-
 	c := &Conn{
 		port:                port,
 		protocol:            protocol,
@@ -92,7 +87,6 @@ func NewConn(
 		frameChan:           make(chan *PsFrame),
 		demuxerChan:         make(chan *PsFrame, 30),
 		done:                make(chan struct{}),
-		file:                file,
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
