@@ -57,7 +57,8 @@ func (s *session) initialize() {
 	s.uuid = uuid.New()
 	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport)
 
-	s.Log(logger.Info, "created by %s", s.req.pathName)
+	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d",
+		s.req.pathName, s.portPair.RTPPort, s.req.transport)
 
 	s.wg.Add(1)
 	go s.run()

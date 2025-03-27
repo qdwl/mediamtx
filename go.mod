@@ -29,8 +29,8 @@ require (
 	github.com/pion/rtp v1.8.5
 	github.com/pion/sdp/v3 v3.0.9
 	github.com/pion/webrtc/v3 v3.2.22
+	github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3
 	github.com/stretchr/testify v1.9.0
-	github.com/yapingcat/gomedia/mpeg2 v0.0.0-20220617074658-94762898dc25
 	golang.org/x/crypto v0.22.0
 	golang.org/x/net v0.24.0
 	golang.org/x/sys v0.19.0
@@ -69,11 +69,9 @@ require (
 	github.com/pion/transport/v2 v2.2.3 // indirect
 	github.com/pion/turn/v2 v2.1.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
-	github.com/yapingcat/gomedia/codec v0.0.0-20220609081842-9e0c0e8a19a0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
