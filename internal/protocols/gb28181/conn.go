@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	UdpSocket int = 0
-	TcpClient int = 1
-	TcpServer int = 2
+	UdpSocket int = 1
+	TcpClient int = 3
+	TcpServer int = 4
 )
 
 type PsFrame struct {
