@@ -39,9 +39,9 @@ func (s *httpServer) initialize() error {
 
 	router := gin.New()
 	router.SetTrustedProxies(s.trustedProxies.ToTrustedProxies()) //nolint:errcheck
-	router.POST("/gb28181", s.onCreateStream)
-	router.PUT("/gb28181/:id", s.onUpdateStream)
-	router.DELETE("/gb28181/:id", s.onDeleteStream)
+	router.POST("/gb28181/:path", s.onCreateStream)
+	router.PUT("/gb28181/:path", s.onUpdateStream)
+	router.DELETE("/gb28181/:path", s.onDeleteStream)
 	network, address := restrictnetwork.Restrict("tcp", s.address)
 
 	var err error
@@ -70,6 +70,7 @@ func (s *httpServer) close() {
 }
 
 func (s *httpServer) onCreateStream(ctx *gin.Context) {
+	pathName := ctx.Param("path")
 	req := GB28181CreateReq{}
 
 	if err := ctx.ShouldBind(&req); err != nil {
@@ -78,7 +79,7 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 	}
 
 	res := s.parent.newSession(gb28181NewSessionReq{
-		pathName:   req.PathName,
+		pathName:   pathName,
 		ssrc:       req.SSRC,
 		remoteIp:   req.RemoteIP,
 		remotePort: req.RemotePort,
@@ -93,7 +94,6 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 	}
 
 	res1 := GB28181CreateRes{
-		PathName:  res.sx.req.pathName,
 		SessionID: res.sx.uuid.String(),
 		LocalPort: res.sx.conn.Port(),
 	}
@@ -102,7 +102,7 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 }
 
 func (s *httpServer) onUpdateStream(ctx *gin.Context) {
-	sessionId := ctx.Param("id")
+	pathName := ctx.Param("path")
 
 	req := GB28181UpdateReq{}
 	if err := ctx.ShouldBind(&req); err != nil {
@@ -111,9 +111,9 @@ func (s *httpServer) onUpdateStream(ctx *gin.Context) {
 	}
 
 	res := s.parent.updateSession(gb28181UpdateSessionReq{
-		pathName:   req.PathName,
+		pathName:   pathName,
 		ssrc:       req.SSRC,
-		sessionId:  sessionId,
+		sessionId:  req.SessionID,
 		remoteIp:   req.RemoteIP,
 		remotePort: req.RemotePort,
 	})
@@ -128,10 +128,17 @@ func (s *httpServer) onUpdateStream(ctx *gin.Context) {
 }
 
 func (s *httpServer) onDeleteStream(ctx *gin.Context) {
-	sessionId := ctx.Param("id")
+	pathName := ctx.Param("path")
+
+	req := GB28181DeleteReq{}
+	if err := ctx.ShouldBind(&req); err != nil {
+		ctx.Writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	res := s.parent.deleteSession(gb28181DeleteSessionReq{
-		sessionId: sessionId,
+		pathName:  pathName,
+		sessionId: req.SessionID,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
