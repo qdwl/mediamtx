@@ -103,8 +103,8 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 
 func (s *httpServer) onUpdateStream(ctx *gin.Context) {
 	pathName := ctx.Param("path")
-
 	req := GB28181UpdateReq{}
+
 	if err := ctx.ShouldBind(&req); err != nil {
 		ctx.Writer.WriteHeader(http.StatusBadRequest)
 		return

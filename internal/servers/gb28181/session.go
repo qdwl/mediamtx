@@ -2,7 +2,6 @@ package gb28181
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,7 +64,8 @@ func (s *session) initialize() {
 }
 
 func (s *session) Log(level logger.Level, format string, args ...interface{}) {
-	id := hex.EncodeToString(s.uuid[:4])
+	// id := hex.EncodeToString(s.uuid[:4])
+	id := s.uuid.String()
 	s.parent.Log(level, "[session %v] "+format, append([]interface{}{id}, args...)...)
 }
 
