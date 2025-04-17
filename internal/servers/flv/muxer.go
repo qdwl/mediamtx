@@ -175,6 +175,7 @@ func (m *muxer) setupVideo(
 				if err != nil {
 					return err
 				}
+
 			} else {
 				if !idrPresent && !nonIDRPresent {
 					return nil
@@ -185,6 +186,7 @@ func (m *muxer) setupVideo(
 				if err != nil {
 					return err
 				}
+
 			}
 
 			return m.writeH264(tunit.PTS, dts, idrPresent, tunit.AU)

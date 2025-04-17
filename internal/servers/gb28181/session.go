@@ -45,6 +45,7 @@ type session struct {
 	conn       *gb28181.Conn
 	vcid       uint8
 	acid       uint8
+	timebase   int64
 }
 
 func (s *session) initialize() {
@@ -54,6 +55,7 @@ func (s *session) initialize() {
 	s.ctxCancel = ctxCancel
 	s.created = time.Now()
 	s.uuid = uuid.New()
+	s.timebase = time.Now().UnixMilli()
 	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport)
 
 	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d",
@@ -300,7 +302,8 @@ func (s *session) runPublish() (int, error) {
 			continue
 		}
 
-		pts := time.Duration(frame.PTS) * time.Millisecond
+		// pts := time.Duration(frame.PTS) * time.Millisecond
+		pts := time.Duration(time.Now().UnixMilli()-s.timebase) * time.Millisecond
 
 		cb(pts, frame.Frame)
 	}
