@@ -380,7 +380,9 @@ func (c *Conn) Write(sid uint8, frame []byte, pts uint64, dts uint64) {
 	c.pts = pts
 	c.dts = dts
 
-	c.muxer.Write(sid, frame, pts, dts)
+	if err := c.muxer.Write(sid, frame, pts, dts); err != nil {
+		fmt.Printf("write frame error %v\n", err)
+	}
 }
 
 func (c *Conn) write(buf []byte) error {
