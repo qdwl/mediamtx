@@ -173,7 +173,8 @@ func (m *muxer) setupVideo(
 				var err error
 				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
 				if err != nil {
-					return err
+					m.Log(logger.Info, "dts extract error %v", err)
+					// return err
 				}
 
 			} else {
@@ -184,7 +185,8 @@ func (m *muxer) setupVideo(
 				var err error
 				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
 				if err != nil {
-					return err
+					m.Log(logger.Info, "dts extract error %v", err)
+					// return err
 				}
 
 			}
@@ -231,13 +233,15 @@ func (m *muxer) setupVideo(
 				var err error
 				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
 				if err != nil {
-					return err
+					m.Log(logger.Info, "dts extract error %v", err)
+					// return err
 				}
 			} else {
 				var err error
 				dts, err = videoDTSExtractor.Extract(tunit.AU, tunit.PTS)
 				if err != nil {
-					return err
+					m.Log(logger.Info, "dts extract error %v", err)
+					// return err
 				}
 			}
 
