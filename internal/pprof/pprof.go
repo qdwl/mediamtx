@@ -4,11 +4,10 @@ package pprof
 import (
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
-	// start pprof
-	_ "net/http/pprof"
+	"github.com/gin-contrib/pprof"
+	"github.com/gin-gonic/gin"
 
 	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
@@ -17,34 +16,52 @@ import (
 	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 )
 
+type pprofAuthManager interface {
+	Authenticate(req *auth.Request) error
+}
+
 type pprofParent interface {
 	logger.Writer
 }
 
 // PPROF is a pprof exporter.
 type PPROF struct {
-	Address     string
-	ReadTimeout conf.StringDuration
-	AuthManager *auth.Manager
-	Parent      pprofParent
+	Address        string
+	Encryption     bool
+	ServerKey      string
+	ServerCert     string
+	AllowOrigin    string
+	TrustedProxies conf.IPNetworks
+	ReadTimeout    conf.Duration
+	AuthManager    pprofAuthManager
+	Parent         pprofParent
 
-	httpServer *httpp.WrappedServer
+	httpServer *httpp.Server
 }
 
 // Initialize initializes PPROF.
 func (pp *PPROF) Initialize() error {
+	router := gin.New()
+	router.SetTrustedProxies(pp.TrustedProxies.ToTrustedProxies()) //nolint:errcheck
+
+	router.Use(pp.middlewareOrigin)
+	router.Use(pp.middlewareAuth)
+
+	pprof.Register(router)
+
 	network, address := restrictnetwork.Restrict("tcp", pp.Address)
 
-	var err error
-	pp.httpServer, err = httpp.NewWrappedServer(
-		network,
-		address,
-		time.Duration(pp.ReadTimeout),
-		"",
-		"",
-		pp,
-		pp,
-	)
+	pp.httpServer = &httpp.Server{
+		Network:     network,
+		Address:     address,
+		ReadTimeout: time.Duration(pp.ReadTimeout),
+		Encryption:  pp.Encryption,
+		ServerCert:  pp.ServerCert,
+		ServerKey:   pp.ServerKey,
+		Handler:     router,
+		Parent:      pp,
+	}
+	err := pp.httpServer.Initialize()
 	if err != nil {
 		return err
 	}
@@ -65,30 +82,40 @@ func (pp *PPROF) Log(level logger.Level, format string, args ...interface{}) {
 	pp.Parent.Log(level, "[pprof] "+format, args...)
 }
 
-func (pp *PPROF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	user, pass, hasCredentials := r.BasicAuth()
+func (pp *PPROF) middlewareOrigin(ctx *gin.Context) {
+	ctx.Header("Access-Control-Allow-Origin", pp.AllowOrigin)
+	ctx.Header("Access-Control-Allow-Credentials", "true")
 
-	ip, _, _ := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	// preflight requests
+	if ctx.Request.Method == http.MethodOptions &&
+		ctx.Request.Header.Get("Access-Control-Request-Method") != "" {
+		ctx.Header("Access-Control-Allow-Methods", "OPTIONS, GET")
+		ctx.Header("Access-Control-Allow-Headers", "Authorization")
+		ctx.AbortWithStatus(http.StatusNoContent)
+		return
+	}
+}
 
-	err := pp.AuthManager.Authenticate(&auth.Request{
-		User:   user,
-		Pass:   pass,
-		IP:     net.ParseIP(ip),
-		Action: conf.AuthActionMetrics,
-	})
+func (pp *PPROF) middlewareAuth(ctx *gin.Context) {
+	req := &auth.Request{
+		Action:      conf.AuthActionPprof,
+		Query:       ctx.Request.URL.RawQuery,
+		Credentials: httpp.Credentials(ctx.Request),
+		IP:          net.ParseIP(ctx.ClientIP()),
+	}
+
+	err := pp.AuthManager.Authenticate(req)
 	if err != nil {
-		if !hasCredentials {
-			w.Header().Set("WWW-Authenticate", `Basic realm="mediamtx"`)
-			w.WriteHeader(http.StatusUnauthorized)
+		if err.(auth.Error).AskCredentials { //nolint:errorlint
+			ctx.Header("WWW-Authenticate", `Basic realm="mediamtx"`)
+			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
 		// wait some seconds to mitigate brute force attacks
 		<-time.After(auth.PauseAfterError)
 
-		w.WriteHeader(http.StatusUnauthorized)
+		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-
-	http.DefaultServeMux.ServeHTTP(w, r)
 }

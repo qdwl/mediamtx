@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"sort"
 	"sync"
 
 	"github.com/google/uuid"
 
+	"github.com/bluenviron/mediamtx/internal/certloader"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
@@ -22,6 +24,10 @@ import (
 
 // ErrConnNotFound is returned when a connection is not found.
 var ErrConnNotFound = errors.New("connection not found")
+
+func interfaceIsEmpty(i interface{}) bool {
+	return reflect.ValueOf(i).Kind() != reflect.Ptr || reflect.ValueOf(i).IsNil()
+}
 
 type serverAPIConnsListRes struct {
 	data *defs.APIRTMPConnList
@@ -51,6 +57,11 @@ type serverAPIConnsKickReq struct {
 	res  chan serverAPIConnsKickRes
 }
 
+type serverMetrics interface {
+	SetRTMPSServer(defs.APIRTMPServer)
+	SetRTMPServer(defs.APIRTMPServer)
+}
+
 type serverPathManager interface {
 	AddPublisher(req defs.PathAddPublisherReq) (defs.Path, error)
 	AddReader(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error)
@@ -63,9 +74,8 @@ type serverParent interface {
 // Server is a RTMP server.
 type Server struct {
 	Address             string
-	ReadTimeout         conf.StringDuration
-	WriteTimeout        conf.StringDuration
-	WriteQueueSize      int
+	ReadTimeout         conf.Duration
+	WriteTimeout        conf.Duration
 	IsTLS               bool
 	ServerCert          string
 	ServerKey           string
@@ -74,6 +84,7 @@ type Server struct {
 	RunOnConnectRestart bool
 	RunOnDisconnect     string
 	ExternalCmdPool     *externalcmd.Pool
+	Metrics             serverMetrics
 	PathManager         serverPathManager
 	Parent              serverParent
 
@@ -82,6 +93,7 @@ type Server struct {
 	wg        sync.WaitGroup
 	ln        net.Listener
 	conns     map[*conn]struct{}
+	loader    *certloader.CertLoader
 
 	// in
 	chNewConn      chan net.Conn
@@ -99,13 +111,18 @@ func (s *Server) Initialize() error {
 			return net.Listen(restrictnetwork.Restrict("tcp", s.Address))
 		}
 
-		cert, err := tls.LoadX509KeyPair(s.ServerCert, s.ServerKey)
+		s.loader = &certloader.CertLoader{
+			CertPath: s.ServerCert,
+			KeyPath:  s.ServerKey,
+			Parent:   s.Parent,
+		}
+		err := s.loader.Initialize()
 		if err != nil {
 			return nil, err
 		}
 
 		network, address := restrictnetwork.Restrict("tcp", s.Address)
-		return tls.Listen(network, address, &tls.Config{Certificates: []tls.Certificate{cert}})
+		return tls.Listen(network, address, &tls.Config{GetCertificate: s.loader.GetCertificate()})
 	}()
 	if err != nil {
 		return err
@@ -134,6 +151,14 @@ func (s *Server) Initialize() error {
 	s.wg.Add(1)
 	go s.run()
 
+	if !interfaceIsEmpty(s.Metrics) {
+		if s.IsTLS {
+			s.Metrics.SetRTMPSServer(s)
+		} else {
+			s.Metrics.SetRTMPServer(s)
+		}
+	}
+
 	return nil
 }
 
@@ -151,8 +176,21 @@ func (s *Server) Log(level logger.Level, format string, args ...interface{}) {
 // Close closes the server.
 func (s *Server) Close() {
 	s.Log(logger.Info, "listener is closing")
+
+	if !interfaceIsEmpty((s.Metrics)) {
+		if s.IsTLS {
+			s.Metrics.SetRTMPSServer(nil)
+		} else {
+			s.Metrics.SetRTMPServer(nil)
+		}
+	}
+
 	s.ctxCancel()
 	s.wg.Wait()
+
+	if s.loader != nil {
+		s.loader.Close()
+	}
 }
 
 func (s *Server) run() {
@@ -172,7 +210,6 @@ outer:
 				rtspAddress:         s.RTSPAddress,
 				readTimeout:         s.ReadTimeout,
 				writeTimeout:        s.WriteTimeout,
-				writeQueueSize:      s.WriteQueueSize,
 				runOnConnect:        s.RunOnConnect,
 				runOnConnectRestart: s.RunOnConnectRestart,
 				runOnDisconnect:     s.RunOnDisconnect,

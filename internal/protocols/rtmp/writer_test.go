@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 	"github.com/stretchr/testify/require"
 
 	"github.com/bluenviron/mediamtx/internal/protocols/rtmp/amf0"
@@ -40,9 +40,19 @@ func TestWriteTracks(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	c := newNoHandshakeConn(&buf)
+	c := &Conn{
+		RW:            &buf,
+		skipHandshake: true,
+	}
+	err := c.Initialize()
+	require.NoError(t, err)
 
-	_, err := NewWriter(c, videoTrack, audioTrack)
+	w := &Writer{
+		Conn:       c,
+		VideoTrack: videoTrack,
+		AudioTrack: audioTrack,
+	}
+	err = w.Initialize()
 	require.NoError(t, err)
 
 	bc := bytecounter.NewReadWriter(&buf)

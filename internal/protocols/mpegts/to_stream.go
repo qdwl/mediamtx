@@ -7,29 +7,30 @@ import (
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/mediacommon/pkg/formats/mpegts"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/mpegts"
 
+	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/unit"
 )
 
-// ErrNoTracks is returned when there are no supported tracks.
-var ErrNoTracks = errors.New("no supported tracks found (supported are H265, H264," +
-	" MPEG-4 Video, MPEG-1/2 Video, Opus, MPEG-4 Audio, MPEG-1 Audio, AC-3")
+var errNoSupportedCodecs = errors.New(
+	"the stream doesn't contain any supported codec, which are currently " +
+		"H265, H264, MPEG-4 Video, MPEG-1/2 Video, Opus, MPEG-4 Audio, MPEG-1 Audio, AC-3")
 
-// ToStream converts a MPEG-TS stream to a server stream.
-func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, error) {
+// ToStream maps a MPEG-TS stream to a MediaMTX stream.
+func ToStream(
+	r *mpegts.Reader,
+	stream **stream.Stream,
+	l logger.Writer,
+) ([]*description.Media, error) {
 	var medias []*description.Media //nolint:prealloc
+	var unsupportedTracks []int
 
-	var td *mpegts.TimeDecoder
-	decodeTime := func(t int64) time.Duration {
-		if td == nil {
-			td = mpegts.NewTimeDecoder(t)
-		}
-		return td.Decode(t)
-	}
+	td := &mpegts.TimeDecoder{}
+	td.Initialize()
 
-	for _, track := range r.Tracks() { //nolint:dupl
+	for i, track := range r.Tracks() { //nolint:dupl
 		var medi *description.Media
 
 		switch codec := track.Codec.(type) {
@@ -41,11 +42,13 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 				}},
 			}
 
-			r.OnDataH26x(track, func(pts int64, _ int64, au [][]byte) error {
+			r.OnDataH265(track, func(pts int64, _ int64, au [][]byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H265{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: pts, // no conversion is needed since clock rate is 90khz in both MPEG-TS and RTSP
 					},
 					AU: au,
 				})
@@ -61,11 +64,13 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 				}},
 			}
 
-			r.OnDataH26x(track, func(pts int64, _ int64, au [][]byte) error {
+			r.OnDataH264(track, func(pts int64, _ int64, au [][]byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H264{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: pts, // no conversion is needed since clock rate is 90khz in both MPEG-TS and RTSP
 					},
 					AU: au,
 				})
@@ -81,10 +86,12 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			}
 
 			r.OnDataMPEGxVideo(track, func(pts int64, frame []byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.MPEG4Video{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: pts, // no conversion is needed since clock rate is 90khz in both MPEG-TS and RTSP
 					},
 					Frame: frame,
 				})
@@ -98,10 +105,12 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			}
 
 			r.OnDataMPEGxVideo(track, func(pts int64, frame []byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.MPEG1Video{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: pts, // no conversion is needed since clock rate is 90khz in both MPEG-TS and RTSP
 					},
 					Frame: frame,
 				})
@@ -112,16 +121,18 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			medi = &description.Media{
 				Type: description.MediaTypeAudio,
 				Formats: []format.Format{&format.Opus{
-					PayloadTyp: 96,
-					IsStereo:   (codec.ChannelCount >= 2),
+					PayloadTyp:   96,
+					ChannelCount: codec.ChannelCount,
 				}},
 			}
 
 			r.OnDataOpus(track, func(pts int64, packets [][]byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.Opus{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: multiplyAndDivide(pts, int64(medi.Formats[0].ClockRate()), 90000),
 					},
 					Packets: packets,
 				})
@@ -141,10 +152,12 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			}
 
 			r.OnDataMPEG4Audio(track, func(pts int64, aus [][]byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.MPEG4Audio{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: multiplyAndDivide(pts, int64(medi.Formats[0].ClockRate()), 90000),
 					},
 					AUs: aus,
 				})
@@ -158,10 +171,12 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			}
 
 			r.OnDataMPEG1Audio(track, func(pts int64, frames [][]byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.MPEG1Audio{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: pts, // no conversion is needed since clock rate is 90khz in both MPEG-TS and RTSP
 					},
 					Frames: frames,
 				})
@@ -179,10 +194,12 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			}
 
 			r.OnDataAC3(track, func(pts int64, frame []byte) error {
+				pts = td.Decode(pts)
+
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.AC3{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: decodeTime(pts),
+						PTS: multiplyAndDivide(pts, int64(medi.Formats[0].ClockRate()), 90000),
 					},
 					Frames: [][]byte{frame},
 				})
@@ -190,6 +207,7 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 			})
 
 		default:
+			unsupportedTracks = append(unsupportedTracks, i+1)
 			continue
 		}
 
@@ -197,7 +215,11 @@ func ToStream(r *mpegts.Reader, stream **stream.Stream) ([]*description.Media, e
 	}
 
 	if len(medias) == 0 {
-		return nil, ErrNoTracks
+		return nil, errNoSupportedCodecs
+	}
+
+	for _, id := range unsupportedTracks {
+		l.Log(logger.Warn, "skipping track %d (unsupported codec)", id)
 	}
 
 	return medias, nil

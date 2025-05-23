@@ -39,7 +39,7 @@ func TestConfFromFile(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(tmpf)
 
-		conf, confPath, err := Load(tmpf, nil)
+		conf, confPath, err := Load(tmpf, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, tmpf, confPath)
 
@@ -50,11 +50,11 @@ func TestConfFromFile(t *testing.T) {
 		require.Equal(t, &Path{
 			Name:                       "cam1",
 			Source:                     "publisher",
-			SourceOnDemandStartTimeout: 10 * StringDuration(time.Second),
-			SourceOnDemandCloseAfter:   10 * StringDuration(time.Second),
+			SourceOnDemandStartTimeout: 10 * Duration(time.Second),
+			SourceOnDemandCloseAfter:   10 * Duration(time.Second),
 			RecordPath:                 "./recordings/%path/%Y-%m-%d_%H-%M-%S-%f",
 			RecordFormat:               RecordFormatFMP4,
-			RecordPartDuration:         100000000,
+			RecordPartDuration:         Duration(1 * time.Second),
 			RecordSegmentDuration:      3600000000000,
 			RecordDeleteAfter:          86400000000000,
 			OverridePublisher:          true,
@@ -69,16 +69,18 @@ func TestConfFromFile(t *testing.T) {
 			RPICameraDenoise:           "off",
 			RPICameraMetering:          "centre",
 			RPICameraFPS:               30,
-			RPICameraIDRPeriod:         60,
-			RPICameraBitrate:           1000000,
-			RPICameraProfile:           "main",
-			RPICameraLevel:             "4.1",
 			RPICameraAfMode:            "continuous",
 			RPICameraAfRange:           "normal",
 			RPICameraAfSpeed:           "normal",
 			RPICameraTextOverlay:       "%Y-%m-%d %H:%M:%S - MediaMTX",
-			RunOnDemandStartTimeout:    5 * StringDuration(time.Second),
-			RunOnDemandCloseAfter:      10 * StringDuration(time.Second),
+			RPICameraCodec:             "auto",
+			RPICameraIDRPeriod:         60,
+			RPICameraBitrate:           5000000,
+			RPICameraProfile:           "main",
+			RPICameraLevel:             "4.1",
+			RPICameraJPEGQuality:       60,
+			RunOnDemandStartTimeout:    5 * Duration(time.Second),
+			RunOnDemandCloseAfter:      10 * Duration(time.Second),
 		}, pa)
 	}()
 
@@ -87,7 +89,7 @@ func TestConfFromFile(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(tmpf)
 
-		_, _, err = Load(tmpf, nil)
+		_, _, err = Load(tmpf, nil, nil)
 		require.NoError(t, err)
 	}()
 
@@ -96,7 +98,7 @@ func TestConfFromFile(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(tmpf)
 
-		_, _, err = Load(tmpf, nil)
+		_, _, err = Load(tmpf, nil, nil)
 		require.NoError(t, err)
 	}()
 
@@ -107,7 +109,7 @@ func TestConfFromFile(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(tmpf)
 
-		_, _, err = Load(tmpf, nil)
+		_, _, err = Load(tmpf, nil, nil)
 		require.NoError(t, err)
 	}()
 }
@@ -129,11 +131,11 @@ func TestConfFromFileAndEnv(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(tmpf)
 
-	conf, confPath, err := Load(tmpf, nil)
+	conf, confPath, err := Load(tmpf, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, tmpf, confPath)
 
-	require.Equal(t, Protocols{Protocol(gortsplib.TransportTCP): {}}, conf.Protocols)
+	require.Equal(t, RTSPTransports{gortsplib.TransportTCP: {}}, conf.RTSPTransports)
 	require.Equal(t, false, conf.RTMP)
 
 	pa, ok := conf.Paths["cam1"]
@@ -148,7 +150,7 @@ func TestConfFromFileAndEnv(t *testing.T) {
 func TestConfFromEnvOnly(t *testing.T) {
 	t.Setenv("MTX_PATHS_CAM1_SOURCE", "rtsp://testing")
 
-	conf, confPath, err := Load("", nil)
+	conf, confPath, err := Load("", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "", confPath)
 
@@ -181,7 +183,7 @@ func TestConfEncryption(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(tmpf)
 
-	conf, confPath, err := Load(tmpf, nil)
+	conf, confPath, err := Load(tmpf, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, tmpf, confPath)
 
@@ -192,6 +194,66 @@ func TestConfEncryption(t *testing.T) {
 	require.Equal(t, true, ok)
 }
 
+func TestConfDeprecatedAuth(t *testing.T) {
+	tmpf, err := createTempFile([]byte(
+		"paths:\n" +
+			"  cam:\n" +
+			"    readUser: myuser\n" +
+			"    readPass: mypass\n"))
+	require.NoError(t, err)
+	defer os.Remove(tmpf)
+
+	conf, _, err := Load(tmpf, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, AuthInternalUsers{
+		{
+			User: "any",
+			Permissions: []AuthInternalUserPermission{
+				{
+					Action: AuthActionPlayback,
+				},
+			},
+		},
+		{
+			User: "any",
+			IPs:  IPNetworks{mustParseCIDR("127.0.0.1/32"), mustParseCIDR("::1/128")},
+			Permissions: []AuthInternalUserPermission{
+				{
+					Action: AuthActionAPI,
+				},
+				{
+					Action: AuthActionMetrics,
+				},
+				{
+					Action: AuthActionPprof,
+				},
+			},
+		},
+		{
+			User: "any",
+			IPs:  IPNetworks{mustParseCIDR("0.0.0.0/0")},
+			Permissions: []AuthInternalUserPermission{
+				{
+					Action: AuthActionPublish,
+					Path:   "cam",
+				},
+			},
+		},
+		{
+			User: "myuser",
+			Pass: "mypass",
+			IPs:  IPNetworks{mustParseCIDR("0.0.0.0/0")},
+			Permissions: []AuthInternalUserPermission{
+				{
+					Action: AuthActionRead,
+					Path:   "cam",
+				},
+			},
+		},
+	}, conf.AuthInternalUsers)
+}
+
 func TestConfErrors(t *testing.T) {
 	for _, ca := range []struct {
 		name string
@@ -199,9 +261,25 @@ func TestConfErrors(t *testing.T) {
 		err  string
 	}{
 		{
-			"non existent parameter 1",
+			"duplicate parameter",
+			"paths:\n" +
+				"paths:\n",
+			"yaml: unmarshal errors:\n  line 2: key \"paths\" already set in map",
+		},
+		{
+			"non existent parameter",
 			`invalid: param`,
 			"json: unknown field \"invalid\"",
+		},
+		{
+			"invalid readTimeout",
+			"readTimeout: 0s\n",
+			"'readTimeout' must be greater than zero",
+		},
+		{
+			"invalid writeTimeout",
+			"writeTimeout: 0s\n",
+			"'writeTimeout' must be greater than zero",
 		},
 		{
 			"invalid writeQueueSize",
@@ -215,15 +293,15 @@ func TestConfErrors(t *testing.T) {
 		},
 		{
 			"invalid strict encryption 1",
-			"encryption: strict\n" +
-				"protocols: [udp]\n",
-			"strict encryption can't be used with the UDP transport protocol",
+			"rtspEncryption: strict\n" +
+				"rtspTransports: [udp]\n",
+			"strict encryption cannot be used with the UDP transport protocol",
 		},
 		{
 			"invalid strict encryption 2",
-			"encryption: strict\n" +
-				"protocols: [multicast]\n",
-			"strict encryption can't be used with the UDP-multicast transport protocol",
+			"rtspEncryption: strict\n" +
+				"rtspTransports: [multicast]\n",
+			"strict encryption cannot be used with the UDP-multicast transport protocol",
 		},
 		{
 			"invalid ICE server",
@@ -231,11 +309,17 @@ func TestConfErrors(t *testing.T) {
 			"invalid ICE server: 'testing'",
 		},
 		{
-			"non existent parameter 2",
+			"non existent parameter in path",
 			"paths:\n" +
 				"  mypath:\n" +
 				"    invalid: parameter\n",
 			"json: unknown field \"invalid\"",
+		},
+		{
+			"non existent parameter in auth",
+			"authInternalUsers:\n" +
+				"- users: test\n",
+			"json: unknown field \"users\"",
 		},
 		{
 			"invalid path name",
@@ -251,7 +335,7 @@ func TestConfErrors(t *testing.T) {
 				"    source: rpiCamera\n" +
 				"  cam2:\n" +
 				"    source: rpiCamera\n",
-			"'rpiCamera' with same camera ID 0 is used as source in two paths, 'cam2' and 'cam1'",
+			"'rpiCamera' with same camera ID 0 is used as source in two paths, 'cam1' and 'cam2'",
 		},
 		{
 			"invalid srt publish passphrase",
@@ -281,13 +365,95 @@ func TestConfErrors(t *testing.T) {
 				"  ~^.*$:\n",
 			`all_others, all and '~^.*$' are aliases`,
 		},
+		{
+			"jwt claim key empty",
+			"authMethod: jwt\n" +
+				"authJWTJWKS: https://not-real.com\n" +
+				"authJWTClaimKey: \"\"",
+			"'authJWTClaimKey' is empty",
+		},
+		{
+			"invalid rtsp auth methods",
+			"rtspAuthMethods: []",
+			"at least one 'rtspAuthMethods' must be provided",
+		},
+		{
+			"invalid fallback",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    fallback: invalid://invalid",
+			`'invalid://invalid' is not a valid RTSP URL`,
+		},
+		{
+			"invalid source redirect",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    source: redirect\n" +
+				"    sourceRedirect: invalid://invalid",
+			`'invalid://invalid' is not a valid RTSP URL`,
+		},
+		{
+			"useless source redirect",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    sourceRedirect: invalid://invalid",
+			`'sourceRedirect' is useless when source is not 'redirect'`,
+		},
+		{
+			"invalid user",
+			"authInternalUsers:\n" +
+				"- user:\n" +
+				"  pass: test\n" +
+				"  permissions:\n" +
+				"  - action: publish\n",
+			"empty usernames are not supported",
+		},
+		{
+			"invalid pass",
+			"authInternalUsers:\n" +
+				"- user: any\n" +
+				"  pass: test\n" +
+				"  permissions:\n" +
+				"  - action: publish\n",
+			`using a password with 'any' user is not supported`,
+		},
+		{
+			"invalid record path 1",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    recordPath: invalid\n",
+			`'recordPath' must contain %path`,
+		},
+		{
+			"invalid record path 2",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    recordPath: '%path/invalid'\n",
+			`'recordPath' must contain either %s or %Y %m %d %H %M %S`,
+		},
+		{
+			"invalid record path 3",
+			"playback: true\n" +
+				"paths:\n" +
+				"  my_path:\n" +
+				"    recordPath: '%path/%s'\n",
+			`'recordPath' must contain %f`,
+		},
+		{
+			"invalid record delete after",
+			"paths:\n" +
+				"  my_path:\n" +
+				"    recordSegmentDuration: 30m\n" +
+				"    recordDeleteAfter: 20m\n",
+			`'recordDeleteAfter' cannot be lower than 'recordSegmentDuration'`,
+		},
 	} {
 		t.Run(ca.name, func(t *testing.T) {
 			tmpf, err := createTempFile([]byte(ca.conf))
 			require.NoError(t, err)
 			defer os.Remove(tmpf)
 
-			_, _, err = Load(tmpf, nil)
+			_, _, err = Load(tmpf, nil, nil)
 			require.EqualError(t, err, ca.err)
 		})
 	}
@@ -295,13 +461,13 @@ func TestConfErrors(t *testing.T) {
 
 func TestSampleConfFile(t *testing.T) {
 	func() {
-		conf1, confPath1, err := Load("../../mediamtx.yml", nil)
+		conf1, confPath1, err := Load("../../mediamtx.yml", nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, "../../mediamtx.yml", confPath1)
 		conf1.Paths = make(map[string]*Path)
 		conf1.OptionalPaths = nil
 
-		conf2, confPath2, err := Load("", nil)
+		conf2, confPath2, err := Load("", nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, "", confPath2)
 
@@ -309,7 +475,7 @@ func TestSampleConfFile(t *testing.T) {
 	}()
 
 	func() {
-		conf1, confPath1, err := Load("../../mediamtx.yml", nil)
+		conf1, confPath1, err := Load("../../mediamtx.yml", nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, "../../mediamtx.yml", confPath1)
 
@@ -317,10 +483,38 @@ func TestSampleConfFile(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(tmpf)
 
-		conf2, confPath2, err := Load(tmpf, nil)
+		conf2, confPath2, err := Load(tmpf, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, tmpf, confPath2)
 
 		require.Equal(t, conf1.Paths, conf2.Paths)
 	}()
+}
+
+// needed due to https://github.com/golang/go/issues/21092
+func TestConfOverrideDefaultSlices(t *testing.T) {
+	tmpf, err := createTempFile([]byte(
+		"authInternalUsers:\n" +
+			"  - user: user1\n" +
+			"  - user: user2\n" +
+			"authHTTPExclude:\n" +
+			"  - path: ''\n"))
+	require.NoError(t, err)
+	defer os.Remove(tmpf)
+
+	conf, _, err := Load(tmpf, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, AuthInternalUsers{
+		{
+			User: "user1",
+		},
+		{
+			User: "user2",
+		},
+	}, conf.AuthInternalUsers)
+
+	require.Equal(t, AuthInternalUserPermissions{
+		{},
+	}, conf.AuthHTTPExclude)
 }

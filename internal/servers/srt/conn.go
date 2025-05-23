@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	mcmpegts "github.com/bluenviron/mediacommon/pkg/formats/mpegts"
+	mcmpegts "github.com/bluenviron/mediacommon/v2/pkg/formats/mpegts"
 	srt "github.com/datarhei/gosrt"
 	"github.com/google/uuid"
 
-	"github.com/bluenviron/mediamtx/internal/asyncwriter"
 	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
+	"github.com/bluenviron/mediamtx/internal/counterdumper"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/hooks"
@@ -52,9 +52,8 @@ const (
 type conn struct {
 	parentCtx           context.Context
 	rtspAddress         string
-	readTimeout         conf.StringDuration
-	writeTimeout        conf.StringDuration
-	writeQueueSize      int
+	readTimeout         conf.Duration
+	writeTimeout        conf.Duration
 	udpMaxPayloadSize   int
 	connReq             srt.ConnRequest
 	runOnConnect        string
@@ -74,9 +73,6 @@ type conn struct {
 	pathName  string
 	query     string
 	sconn     srt.Conn
-
-	chNew     chan srtNewConnReq
-	chSetConn chan srt.Conn
 }
 
 func (c *conn) initialize() {
@@ -84,8 +80,6 @@ func (c *conn) initialize() {
 
 	c.created = time.Now()
 	c.uuid = uuid.New()
-	c.chNew = make(chan srtNewConnReq)
-	c.chSetConn = make(chan srt.Conn)
 
 	c.Log(logger.Info, "opened")
 
@@ -130,47 +124,33 @@ func (c *conn) run() { //nolint:dupl
 }
 
 func (c *conn) runInner() error {
-	var req srtNewConnReq
-	select {
-	case req = <-c.chNew:
-	case <-c.ctx.Done():
-		return errors.New("terminated")
-	}
-
-	answerSent, err := c.runInner2(req)
-
-	if !answerSent {
-		req.res <- nil
-	}
-
-	return err
-}
-
-func (c *conn) runInner2(req srtNewConnReq) (bool, error) {
 	var streamID streamID
-	err := streamID.unmarshal(req.connReq.StreamId())
+	err := streamID.unmarshal(c.connReq.StreamId())
 	if err != nil {
-		return false, fmt.Errorf("invalid stream ID '%s': %w", req.connReq.StreamId(), err)
+		c.connReq.Reject(srt.REJ_PEER)
+		return fmt.Errorf("invalid stream ID '%s': %w", c.connReq.StreamId(), err)
 	}
 
 	if streamID.mode == streamIDModePublish {
-		return c.runPublish(req, &streamID)
+		return c.runPublish(&streamID)
 	}
-	return c.runRead(req, &streamID)
+	return c.runRead(&streamID)
 }
 
-func (c *conn) runPublish(req srtNewConnReq, streamID *streamID) (bool, error) {
+func (c *conn) runPublish(streamID *streamID) error {
 	path, err := c.pathManager.AddPublisher(defs.PathAddPublisherReq{
 		Author: c,
 		AccessRequest: defs.PathAccessRequest{
 			Name:    streamID.path,
-			IP:      c.ip(),
+			Query:   streamID.query,
 			Publish: true,
-			User:    streamID.user,
-			Pass:    streamID.pass,
 			Proto:   auth.ProtocolSRT,
 			ID:      &c.uuid,
-			Query:   streamID.query,
+			Credentials: &auth.Credentials{
+				User: streamID.user,
+				Pass: streamID.pass,
+			},
+			IP: c.ip(),
 		},
 	})
 	if err != nil {
@@ -178,21 +158,24 @@ func (c *conn) runPublish(req srtNewConnReq, streamID *streamID) (bool, error) {
 		if errors.As(err, &terr) {
 			// wait some seconds to mitigate brute force attacks
 			<-time.After(auth.PauseAfterError)
-			return false, terr
+			c.connReq.Reject(srt.REJ_PEER)
+			return terr
 		}
-		return false, err
+		c.connReq.Reject(srt.REJ_PEER)
+		return err
 	}
 
 	defer path.RemovePublisher(defs.PathRemovePublisherReq{Author: c})
 
-	err = srtCheckPassphrase(req.connReq, path.SafeConf().SRTPublishPassphrase)
+	err = srtCheckPassphrase(c.connReq, path.SafeConf().SRTPublishPassphrase)
 	if err != nil {
-		return false, err
+		c.connReq.Reject(srt.REJ_PEER)
+		return err
 	}
 
-	sconn, err := c.exchangeRequestWithConn(req)
+	sconn, err := c.connReq.Accept()
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	c.mutex.Lock()
@@ -210,31 +193,46 @@ func (c *conn) runPublish(req srtNewConnReq, streamID *streamID) (bool, error) {
 	select {
 	case err := <-readerErr:
 		sconn.Close()
-		return true, err
+		return err
 
 	case <-c.ctx.Done():
 		sconn.Close()
 		<-readerErr
-		return true, errors.New("terminated")
+		return errors.New("terminated")
 	}
 }
 
 func (c *conn) runPublishReader(sconn srt.Conn, path defs.Path) error {
 	sconn.SetReadDeadline(time.Now().Add(time.Duration(c.readTimeout)))
-	r, err := mcmpegts.NewReader(mcmpegts.NewBufferedReader(sconn))
+	r := &mcmpegts.Reader{R: mcmpegts.NewBufferedReader(sconn)}
+	err := r.Initialize()
 	if err != nil {
 		return err
 	}
 
-	decodeErrLogger := logger.NewLimitedLogger(c)
+	decodeErrors := &counterdumper.CounterDumper{
+		OnReport: func(val uint64) {
+			c.Log(logger.Warn, "%d decode %s",
+				val,
+				func() string {
+					if val == 1 {
+						return "error"
+					}
+					return "errors"
+				}())
+		},
+	}
 
-	r.OnDecodeError(func(err error) {
-		decodeErrLogger.Log(logger.Warn, err.Error())
+	decodeErrors.Start()
+	defer decodeErrors.Stop()
+
+	r.OnDecodeError(func(_ error) {
+		decodeErrors.Increase()
 	})
 
 	var stream *stream.Stream
 
-	medias, err := mpegts.ToStream(r, &stream)
+	medias, err := mpegts.ToStream(r, &stream, c)
 	if err != nil {
 		return err
 	}
@@ -249,24 +247,26 @@ func (c *conn) runPublishReader(sconn srt.Conn, path defs.Path) error {
 	}
 
 	for {
-		err := r.Read()
+		err = r.Read()
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (c *conn) runRead(req srtNewConnReq, streamID *streamID) (bool, error) {
+func (c *conn) runRead(streamID *streamID) error {
 	path, stream, err := c.pathManager.AddReader(defs.PathAddReaderReq{
 		Author: c,
 		AccessRequest: defs.PathAccessRequest{
 			Name:  streamID.path,
-			IP:    c.ip(),
-			User:  streamID.user,
-			Pass:  streamID.pass,
+			Query: streamID.query,
 			Proto: auth.ProtocolSRT,
 			ID:    &c.uuid,
-			Query: streamID.query,
+			Credentials: &auth.Credentials{
+				User: streamID.user,
+				Pass: streamID.pass,
+			},
+			IP: c.ip(),
 		},
 	})
 	if err != nil {
@@ -274,21 +274,24 @@ func (c *conn) runRead(req srtNewConnReq, streamID *streamID) (bool, error) {
 		if errors.As(err, &terr) {
 			// wait some seconds to mitigate brute force attacks
 			<-time.After(auth.PauseAfterError)
-			return false, err
+			c.connReq.Reject(srt.REJ_PEER)
+			return terr
 		}
-		return false, err
+		c.connReq.Reject(srt.REJ_PEER)
+		return err
 	}
 
 	defer path.RemoveReader(defs.PathRemoveReaderReq{Author: c})
 
-	err = srtCheckPassphrase(req.connReq, path.SafeConf().SRTReadPassphrase)
+	err = srtCheckPassphrase(c.connReq, path.SafeConf().SRTReadPassphrase)
 	if err != nil {
-		return false, err
+		c.connReq.Reject(srt.REJ_PEER)
+		return err
 	}
 
-	sconn, err := c.exchangeRequestWithConn(req)
+	sconn, err := c.connReq.Accept()
 	if err != nil {
-		return true, err
+		return err
 	}
 	defer sconn.Close()
 
@@ -299,19 +302,15 @@ func (c *conn) runRead(req srtNewConnReq, streamID *streamID) (bool, error) {
 	c.sconn = sconn
 	c.mutex.Unlock()
 
-	writer := asyncwriter.New(c.writeQueueSize, c)
-
-	defer stream.RemoveReader(writer)
-
 	bw := bufio.NewWriterSize(sconn, srtMaxPayloadSize(c.udpMaxPayloadSize))
 
-	err = mpegts.FromStream(stream, writer, bw, sconn, time.Duration(c.writeTimeout))
+	err = mpegts.FromStream(stream, c, bw, sconn, time.Duration(c.writeTimeout))
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	c.Log(logger.Info, "is reading from path '%s', %s",
-		path.Name(), defs.FormatsInfo(stream.FormatsForReader(writer)))
+		path.Name(), defs.FormatsInfo(stream.ReaderFormats(c)))
 
 	onUnreadHook := hooks.OnRead(hooks.OnReadParams{
 		Logger:          c,
@@ -326,46 +325,15 @@ func (c *conn) runRead(req srtNewConnReq, streamID *streamID) (bool, error) {
 	// disable read deadline
 	sconn.SetReadDeadline(time.Time{})
 
-	writer.Start()
-	defer writer.Stop()
+	stream.StartReader(c)
+	defer stream.RemoveReader(c)
 
 	select {
 	case <-c.ctx.Done():
-		return true, fmt.Errorf("terminated")
+		return fmt.Errorf("terminated")
 
-	case err := <-writer.Error():
-		return true, err
-	}
-}
-
-func (c *conn) exchangeRequestWithConn(req srtNewConnReq) (srt.Conn, error) {
-	req.res <- c
-
-	select {
-	case sconn := <-c.chSetConn:
-		return sconn, nil
-
-	case <-c.ctx.Done():
-		return nil, errors.New("terminated")
-	}
-}
-
-// new is called by srtListener through srtServer.
-func (c *conn) new(req srtNewConnReq) *conn {
-	select {
-	case c.chNew <- req:
-		return <-req.res
-
-	case <-c.ctx.Done():
-		return nil
-	}
-}
-
-// setConn is called by srtListener .
-func (c *conn) setConn(sconn srt.Conn) {
-	select {
-	case c.chSetConn <- sconn:
-	case <-c.ctx.Done():
+	case err = <-stream.ReaderError(c):
+		return err
 	}
 }
 

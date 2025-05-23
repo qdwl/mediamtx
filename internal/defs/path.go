@@ -2,26 +2,22 @@ package defs
 
 import (
 	"fmt"
-	"net"
 
-	"github.com/bluenviron/gortsplib/v4/pkg/base"
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	"github.com/google/uuid"
 
-	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
-// PathNoOnePublishingError is returned when no one is publishing.
-type PathNoOnePublishingError struct {
+// PathNoStreamAvailableError is returned when no one is publishing.
+type PathNoStreamAvailableError struct {
 	PathName string
 }
 
 // Error implements the error interface.
-func (e PathNoOnePublishingError) Error() string {
-	return fmt.Sprintf("no one is publishing to path '%s'", e.PathName)
+func (e PathNoStreamAvailableError) Error() string {
+	return fmt.Sprintf("no stream is available on path '%s'", e.PathName)
 }
 
 // Path is a path.
@@ -33,46 +29,6 @@ type Path interface {
 	StopPublisher(req PathStopPublisherReq)
 	RemovePublisher(req PathRemovePublisherReq)
 	RemoveReader(req PathRemoveReaderReq)
-}
-
-// PathAccessRequest is an access request.
-type PathAccessRequest struct {
-	Name     string
-	Query    string
-	Publish  bool
-	SkipAuth bool
-
-	// only if skipAuth = false
-	IP          net.IP
-	User        string
-	Pass        string
-	Proto       auth.Protocol
-	ID          *uuid.UUID
-	RTSPRequest *base.Request
-	RTSPBaseURL *base.URL
-	RTSPNonce   string
-}
-
-// ToAuthRequest converts a path access request into an authentication request.
-func (r *PathAccessRequest) ToAuthRequest() *auth.Request {
-	return &auth.Request{
-		User: r.User,
-		Pass: r.Pass,
-		IP:   r.IP,
-		Action: func() conf.AuthAction {
-			if r.Publish {
-				return conf.AuthActionPublish
-			}
-			return conf.AuthActionRead
-		}(),
-		Path:        r.Name,
-		Protocol:    r.Proto,
-		ID:          r.ID,
-		Query:       r.Query,
-		RTSPRequest: r.RTSPRequest,
-		RTSPBaseURL: r.RTSPBaseURL,
-		RTSPNonce:   r.RTSPNonce,
-	}
 }
 
 // PathFindPathConfRes contains the response of FindPathConf().

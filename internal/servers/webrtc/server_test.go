@@ -3,24 +3,26 @@ package webrtc
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	"github.com/bluenviron/mediamtx/internal/asyncwriter"
-	"github.com/bluenviron/mediamtx/internal/auth"
+	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
+	"github.com/bluenviron/mediamtx/internal/protocols/whip"
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/test"
 	"github.com/bluenviron/mediamtx/internal/unit"
 	"github.com/google/uuid"
 	"github.com/pion/rtp"
-	pwebrtc "github.com/pion/webrtc/v3"
+	pwebrtc "github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,16 +52,18 @@ func (p *dummyPath) ExternalCmdEnv() externalcmd.Environment {
 }
 
 func (p *dummyPath) StartPublisher(req defs.PathStartPublisherReq) (*stream.Stream, error) {
-	var err error
-	p.stream, err = stream.New(
-		1460,
-		req.Desc,
-		true,
-		test.NilLogger{},
-	)
+	p.stream = &stream.Stream{
+		WriteQueueSize:     512,
+		UDPMaxPayloadSize:  1472,
+		Desc:               req.Desc,
+		GenerateRTPPackets: true,
+		Parent:             test.NilLogger,
+	}
+	err := p.stream.Initialize()
 	if err != nil {
 		return nil, err
 	}
+
 	close(p.streamCreated)
 	return p.stream, nil
 }
@@ -73,53 +77,33 @@ func (p *dummyPath) RemovePublisher(_ defs.PathRemovePublisherReq) {
 func (p *dummyPath) RemoveReader(_ defs.PathRemoveReaderReq) {
 }
 
-type dummyPathManager struct {
-	path *dummyPath
-}
-
-func (pm *dummyPathManager) FindPathConf(req defs.PathFindPathConfReq) (*conf.Path, error) {
-	if req.AccessRequest.User != "myuser" || req.AccessRequest.Pass != "mypass" {
-		return nil, auth.Error{}
-	}
-	return &conf.Path{}, nil
-}
-
-func (pm *dummyPathManager) AddPublisher(_ defs.PathAddPublisherReq) (defs.Path, error) {
-	return pm.path, nil
-}
-
-func (pm *dummyPathManager) AddReader(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error) {
-	if req.AccessRequest.Name == "nonexisting" {
-		return nil, nil, &defs.PathNoOnePublishingError{}
-	}
-	return pm.path, pm.path.stream, nil
-}
-
 func initializeTestServer(t *testing.T) *Server {
-	path := &dummyPath{
-		streamCreated: make(chan struct{}),
+	pm := &test.PathManager{
+		FindPathConfImpl: func(_ defs.PathFindPathConfReq) (*conf.Path, error) {
+			return &conf.Path{}, nil
+		},
 	}
-
-	pathManager := &dummyPathManager{path: path}
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
 		Encryption:            false,
 		ServerKey:             "",
 		ServerCert:            "",
-		AllowOrigin:           "",
+		AllowOrigin:           "*",
 		TrustedProxies:        conf.IPNetworks{},
-		ReadTimeout:           conf.StringDuration(10 * time.Second),
-		WriteQueueSize:        512,
+		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
 		LocalTCPAddress:       "127.0.0.1:8887",
 		IPsFromInterfaces:     true,
 		IPsFromInterfacesList: []string{},
 		AdditionalHosts:       []string{},
 		ICEServers:            []conf.WebRTCICEServer{},
+		HandshakeTimeout:      conf.Duration(10 * time.Second),
+		TrackGatherTimeout:    conf.Duration(2 * time.Second),
+		STUNGatherTimeout:     conf.Duration(5 * time.Second),
 		ExternalCmdPool:       nil,
-		PathManager:           pathManager,
-		Parent:                test.NilLogger{},
+		PathManager:           pm,
+		Parent:                test.NilLogger,
 	}
 	err := s.Initialize()
 	require.NoError(t, err)
@@ -149,7 +133,7 @@ func TestServerStaticPages(t *testing.T) {
 	}
 }
 
-func TestServerOptionsPreflight(t *testing.T) {
+func TestPreflightRequest(t *testing.T) {
 	s := initializeTestServer(t)
 	defer s.Close()
 
@@ -157,11 +141,10 @@ func TestServerOptionsPreflight(t *testing.T) {
 	defer tr.CloseIdleConnections()
 	hc := &http.Client{Transport: tr}
 
-	// preflight requests must always work, without authentication
-	req, err := http.NewRequest(http.MethodOptions, "http://localhost:8886/teststream/whip", nil)
+	req, err := http.NewRequest(http.MethodOptions, "http://localhost:8886", nil)
 	require.NoError(t, err)
 
-	req.Header.Set("Access-Control-Request-Method", "OPTIONS")
+	req.Header.Add("Access-Control-Request-Method", "GET")
 
 	res, err := hc.Do(req)
 	require.NoError(t, err)
@@ -169,12 +152,22 @@ func TestServerOptionsPreflight(t *testing.T) {
 
 	require.Equal(t, http.StatusNoContent, res.StatusCode)
 
-	_, ok := res.Header["Link"]
-	require.Equal(t, false, ok)
+	byts, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+	require.Equal(t, "true", res.Header.Get("Access-Control-Allow-Credentials"))
+	require.Equal(t, "OPTIONS, GET, POST, PATCH, DELETE", res.Header.Get("Access-Control-Allow-Methods"))
+	require.Equal(t, "Authorization, Content-Type, If-Match", res.Header.Get("Access-Control-Allow-Headers"))
+	require.Equal(t, byts, []byte{})
 }
 
 func TestServerOptionsICEServer(t *testing.T) {
-	pathManager := &dummyPathManager{}
+	pathManager := &test.PathManager{
+		FindPathConfImpl: func(_ defs.PathFindPathConfReq) (*conf.Path, error) {
+			return &conf.Path{}, nil
+		},
+	}
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
@@ -183,8 +176,7 @@ func TestServerOptionsICEServer(t *testing.T) {
 		ServerCert:            "",
 		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
-		ReadTimeout:           conf.StringDuration(10 * time.Second),
-		WriteQueueSize:        512,
+		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
 		LocalTCPAddress:       "127.0.0.1:8887",
 		IPsFromInterfaces:     true,
@@ -195,9 +187,12 @@ func TestServerOptionsICEServer(t *testing.T) {
 			Username: "myuser",
 			Password: "mypass",
 		}},
-		ExternalCmdPool: nil,
-		PathManager:     pathManager,
-		Parent:          test.NilLogger{},
+		HandshakeTimeout:   conf.Duration(10 * time.Second),
+		TrackGatherTimeout: conf.Duration(2 * time.Second),
+		STUNGatherTimeout:  conf.Duration(5 * time.Second),
+		ExternalCmdPool:    nil,
+		PathManager:        pathManager,
+		Parent:             test.NilLogger,
 	}
 	err := s.Initialize()
 	require.NoError(t, err)
@@ -217,7 +212,7 @@ func TestServerOptionsICEServer(t *testing.T) {
 
 	require.Equal(t, http.StatusNoContent, res.StatusCode)
 
-	iceServers, err := webrtc.LinkHeaderUnmarshal(res.Header["Link"])
+	iceServers, err := whip.LinkHeaderUnmarshal(res.Header["Link"])
 	require.NoError(t, err)
 
 	require.Equal(t, []pwebrtc.ICEServer{{
@@ -232,7 +227,22 @@ func TestServerPublish(t *testing.T) {
 		streamCreated: make(chan struct{}),
 	}
 
-	pathManager := &dummyPathManager{path: path}
+	pathManager := &test.PathManager{
+		FindPathConfImpl: func(req defs.PathFindPathConfReq) (*conf.Path, error) {
+			require.Equal(t, "teststream", req.AccessRequest.Name)
+			require.Equal(t, "param=value", req.AccessRequest.Query)
+			require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
+			require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
+			return &conf.Path{}, nil
+		},
+		AddPublisherImpl: func(req defs.PathAddPublisherReq) (defs.Path, error) {
+			require.Equal(t, "teststream", req.AccessRequest.Name)
+			require.Equal(t, "param=value", req.AccessRequest.Query)
+			require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
+			require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
+			return path, nil
+		},
+	}
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
@@ -241,17 +251,19 @@ func TestServerPublish(t *testing.T) {
 		ServerCert:            "",
 		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
-		ReadTimeout:           conf.StringDuration(10 * time.Second),
-		WriteQueueSize:        512,
+		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
 		LocalTCPAddress:       "127.0.0.1:8887",
 		IPsFromInterfaces:     true,
 		IPsFromInterfacesList: []string{},
 		AdditionalHosts:       []string{},
 		ICEServers:            []conf.WebRTCICEServer{},
+		HandshakeTimeout:      conf.Duration(10 * time.Second),
+		TrackGatherTimeout:    conf.Duration(2 * time.Second),
+		STUNGatherTimeout:     conf.Duration(5 * time.Second),
 		ExternalCmdPool:       nil,
 		PathManager:           pathManager,
-		Parent:                test.NilLogger{},
+		Parent:                test.NilLogger,
 	}
 	err := s.Initialize()
 	require.NoError(t, err)
@@ -264,17 +276,27 @@ func TestServerPublish(t *testing.T) {
 	su, err := url.Parse("http://myuser:mypass@localhost:8886/teststream/whip?param=value")
 	require.NoError(t, err)
 
-	wc := &webrtc.WHIPClient{
-		HTTPClient: hc,
-		URL:        su,
-		Log:        test.NilLogger{},
+	track := &webrtc.OutgoingTrack{
+		Caps: pwebrtc.RTPCodecCapability{
+			MimeType:    pwebrtc.MimeTypeH264,
+			ClockRate:   90000,
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+		},
 	}
 
-	tracks, err := wc.Publish(context.Background(), test.FormatH264, nil)
+	wc := &whip.Client{
+		HTTPClient:     hc,
+		URL:            su,
+		Publish:        true,
+		OutgoingTracks: []*webrtc.OutgoingTrack{track},
+		Log:            test.NilLogger,
+	}
+
+	err = wc.Initialize(context.Background())
 	require.NoError(t, err)
 	defer checkClose(t, wc.Close)
 
-	err = tracks[0].WriteRTP(&rtp.Packet{
+	err = track.WriteRTP(&rtp.Packet{
 		Header: rtp.Header{
 			Version:        2,
 			Marker:         true,
@@ -289,13 +311,14 @@ func TestServerPublish(t *testing.T) {
 
 	<-path.streamCreated
 
-	aw := asyncwriter.New(512, &test.NilLogger{})
+	reader := test.NilLogger
 
 	recv := make(chan struct{})
 
-	path.stream.AddReader(aw,
-		path.stream.Desc().Medias[0],
-		path.stream.Desc().Medias[0].Formats[0],
+	path.stream.AddReader(
+		reader,
+		path.stream.Desc.Medias[0],
+		path.stream.Desc.Medias[0].Formats[0],
 		func(u unit.Unit) error {
 			select {
 			case <-recv:
@@ -311,7 +334,10 @@ func TestServerPublish(t *testing.T) {
 			return nil
 		})
 
-	err = tracks[0].WriteRTP(&rtp.Packet{
+	path.stream.StartReader(reader)
+	defer path.stream.RemoveReader(reader)
+
+	err = track.WriteRTP(&rtp.Packet{
 		Header: rtp.Header{
 			Version:        2,
 			Marker:         true,
@@ -324,25 +350,279 @@ func TestServerPublish(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	aw.Start()
 	<-recv
-	aw.Stop()
 }
 
 func TestServerRead(t *testing.T) {
-	desc := &description.Session{Medias: []*description.Media{test.MediaH264}}
+	for _, ca := range []struct {
+		name          string
+		medias        []*description.Media
+		unit          unit.Unit
+		outRTPPayload []byte
+	}{
+		{
+			"av1",
+			[]*description.Media{{
+				Type: description.MediaTypeVideo,
+				Formats: []format.Format{&format.AV1{
+					PayloadTyp: 96,
+				}},
+			}},
+			&unit.AV1{
+				TU: [][]byte{{1, 2}},
+			},
+			[]byte{0x10, 0x01, 0x02},
+		},
+		{
+			"vp9",
+			[]*description.Media{{
+				Type: description.MediaTypeVideo,
+				Formats: []format.Format{&format.VP9{
+					PayloadTyp: 96,
+				}},
+			}},
+			&unit.VP9{
+				Frame: []byte{0x82, 0x49, 0x83, 0x42, 0x0, 0x77, 0xf0, 0x32, 0x34},
+			},
+			[]byte{
+				0x8f, 0xa0, 0xfd, 0x18, 0x07, 0x80, 0x03, 0x24,
+				0x01, 0x14, 0x01, 0x82, 0x49, 0x83, 0x42, 0x00,
+				0x77, 0xf0, 0x32, 0x34,
+			},
+		},
+		{
+			"vp8",
+			[]*description.Media{{
+				Type: description.MediaTypeVideo,
+				Formats: []format.Format{&format.VP8{
+					PayloadTyp: 96,
+				}},
+			}},
+			&unit.VP8{
+				Frame: []byte{1, 2},
+			},
+			[]byte{0x10, 1, 2},
+		},
+		{
+			"h264",
+			[]*description.Media{test.MediaH264},
+			&unit.H264{
+				AU: [][]byte{
+					{5, 1},
+				},
+			},
+			[]byte{
+				0x18, 0x00, 0x19, 0x67, 0x42, 0xc0, 0x28, 0xd9,
+				0x00, 0x78, 0x02, 0x27, 0xe5, 0x84, 0x00, 0x00,
+				0x03, 0x00, 0x04, 0x00, 0x00, 0x03, 0x00, 0xf0,
+				0x3c, 0x60, 0xc9, 0x20, 0x00, 0x04, 0x08, 0x06,
+				0x07, 0x08, 0x00, 0x02, 0x05, 0x01,
+			},
+		},
+		{
+			"opus",
+			[]*description.Media{{
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.Opus{
+					PayloadTyp:   96,
+					ChannelCount: 2,
+				}},
+			}},
+			&unit.Opus{
+				Packets: [][]byte{{1, 2}},
+			},
+			[]byte{1, 2},
+		},
+		{
+			"g722",
+			[]*description.Media{{
+				Type:    description.MediaTypeAudio,
+				Formats: []format.Format{&format.G722{}},
+			}},
+			&unit.Generic{
+				Base: unit.Base{
+					RTPPackets: []*rtp.Packet{{
+						Header: rtp.Header{
+							Version:        2,
+							Marker:         true,
+							PayloadType:    9,
+							SequenceNumber: 1123,
+							Timestamp:      45343,
+							SSRC:           563423,
+						},
+						Payload: []byte{1, 2},
+					}},
+				},
+			},
+			[]byte{1, 2},
+		},
+		{
+			"g711 8khz mono",
+			[]*description.Media{{
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.G711{
+					MULaw:        true,
+					SampleRate:   8000,
+					ChannelCount: 1,
+				}},
+			}},
+			&unit.G711{
+				Samples: []byte{1, 2, 3},
+			},
+			[]byte{1, 2, 3},
+		},
+		{
+			"g711 16khz stereo",
+			[]*description.Media{{
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.G711{
+					MULaw:        true,
+					SampleRate:   16000,
+					ChannelCount: 2,
+				}},
+			}},
+			&unit.G711{
+				Samples: []byte{1, 2, 3, 4},
+			},
+			[]byte{0x86, 0x84, 0x8a, 0x84, 0x8e, 0x84, 0x92, 0x84},
+		},
+		{
+			"lpcm",
+			[]*description.Media{{
+				Type: description.MediaTypeAudio,
+				Formats: []format.Format{&format.LPCM{
+					PayloadTyp:   96,
+					BitDepth:     16,
+					SampleRate:   48000,
+					ChannelCount: 2,
+				}},
+			}},
+			&unit.LPCM{
+				Samples: []byte{1, 2, 3, 4},
+			},
+			[]byte{1, 2, 3, 4},
+		},
+	} {
+		t.Run(ca.name, func(t *testing.T) {
+			desc := &description.Session{Medias: ca.medias}
 
-	stream, err := stream.New(
-		1460,
-		desc,
-		true,
-		test.NilLogger{},
-	)
-	require.NoError(t, err)
+			strm := &stream.Stream{
+				WriteQueueSize:     512,
+				UDPMaxPayloadSize:  1472,
+				Desc:               desc,
+				GenerateRTPPackets: reflect.TypeOf(ca.unit) != reflect.TypeOf(&unit.Generic{}),
+				Parent:             test.NilLogger,
+			}
+			err := strm.Initialize()
+			require.NoError(t, err)
 
-	path := &dummyPath{stream: stream}
+			path := &dummyPath{stream: strm}
 
-	pathManager := &dummyPathManager{path: path}
+			pathManager := &test.PathManager{
+				FindPathConfImpl: func(req defs.PathFindPathConfReq) (*conf.Path, error) {
+					require.Equal(t, "teststream", req.AccessRequest.Name)
+					require.Equal(t, "param=value", req.AccessRequest.Query)
+					require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
+					require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
+					return &conf.Path{}, nil
+				},
+				AddReaderImpl: func(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error) {
+					require.Equal(t, "teststream", req.AccessRequest.Name)
+					require.Equal(t, "param=value", req.AccessRequest.Query)
+					require.Equal(t, "myuser", req.AccessRequest.Credentials.User)
+					require.Equal(t, "mypass", req.AccessRequest.Credentials.Pass)
+					return path, strm, nil
+				},
+			}
+
+			s := &Server{
+				Address:               "127.0.0.1:8886",
+				Encryption:            false,
+				ServerKey:             "",
+				ServerCert:            "",
+				AllowOrigin:           "",
+				TrustedProxies:        conf.IPNetworks{},
+				ReadTimeout:           conf.Duration(10 * time.Second),
+				LocalUDPAddress:       "127.0.0.1:8887",
+				LocalTCPAddress:       "127.0.0.1:8887",
+				IPsFromInterfaces:     true,
+				IPsFromInterfacesList: []string{},
+				AdditionalHosts:       []string{},
+				ICEServers:            []conf.WebRTCICEServer{},
+				HandshakeTimeout:      conf.Duration(10 * time.Second),
+				TrackGatherTimeout:    conf.Duration(2 * time.Second),
+				STUNGatherTimeout:     conf.Duration(5 * time.Second),
+				ExternalCmdPool:       nil,
+				PathManager:           pathManager,
+				Parent:                test.NilLogger,
+			}
+			err = s.Initialize()
+			require.NoError(t, err)
+			defer s.Close()
+
+			u, err := url.Parse("http://myuser:mypass@localhost:8886/teststream/whep?param=value")
+			require.NoError(t, err)
+
+			tr := &http.Transport{}
+			defer tr.CloseIdleConnections()
+			hc := &http.Client{Transport: tr}
+
+			wc := &whip.Client{
+				HTTPClient: hc,
+				URL:        u,
+				Log:        test.NilLogger,
+			}
+
+			writerDone := make(chan struct{})
+
+			go func() {
+				defer close(writerDone)
+
+				strm.WaitRunningReader()
+
+				r := reflect.New(reflect.TypeOf(ca.unit).Elem())
+				r.Elem().Set(reflect.ValueOf(ca.unit).Elem())
+
+				if g, ok := r.Interface().(*unit.Generic); ok {
+					clone := *g.RTPPackets[0]
+					strm.WriteRTPPacket(desc.Medias[0], desc.Medias[0].Formats[0], &clone, time.Time{}, 0)
+				} else {
+					strm.WriteUnit(desc.Medias[0], desc.Medias[0].Formats[0], r.Interface().(unit.Unit))
+				}
+			}()
+
+			err = wc.Initialize(context.Background())
+			require.NoError(t, err)
+			defer checkClose(t, wc.Close)
+
+			done := make(chan struct{})
+
+			wc.IncomingTracks()[0].OnPacketRTP = func(pkt *rtp.Packet, _ time.Time) {
+				select {
+				case <-done:
+				default:
+					require.Equal(t, ca.outRTPPayload, pkt.Payload)
+					close(done)
+				}
+			}
+
+			wc.StartReading()
+
+			<-writerDone
+			<-done
+		})
+	}
+}
+
+func TestServerReadNotFound(t *testing.T) {
+	pm := &test.PathManager{
+		FindPathConfImpl: func(_ defs.PathFindPathConfReq) (*conf.Path, error) {
+			return &conf.Path{}, nil
+		},
+		AddReaderImpl: func(_ defs.PathAddReaderReq) (defs.Path, *stream.Stream, error) {
+			return nil, nil, defs.PathNoStreamAvailableError{}
+		},
+	}
 
 	s := &Server{
 		Address:               "127.0.0.1:8886",
@@ -351,88 +631,22 @@ func TestServerRead(t *testing.T) {
 		ServerCert:            "",
 		AllowOrigin:           "",
 		TrustedProxies:        conf.IPNetworks{},
-		ReadTimeout:           conf.StringDuration(10 * time.Second),
-		WriteQueueSize:        512,
+		ReadTimeout:           conf.Duration(10 * time.Second),
 		LocalUDPAddress:       "127.0.0.1:8887",
 		LocalTCPAddress:       "127.0.0.1:8887",
 		IPsFromInterfaces:     true,
 		IPsFromInterfacesList: []string{},
 		AdditionalHosts:       []string{},
 		ICEServers:            []conf.WebRTCICEServer{},
+		HandshakeTimeout:      conf.Duration(10 * time.Second),
+		TrackGatherTimeout:    conf.Duration(2 * time.Second),
+		STUNGatherTimeout:     conf.Duration(5 * time.Second),
 		ExternalCmdPool:       nil,
-		PathManager:           pathManager,
-		Parent:                test.NilLogger{},
+		PathManager:           pm,
+		Parent:                test.NilLogger,
 	}
-	err = s.Initialize()
+	err := s.Initialize()
 	require.NoError(t, err)
-	defer s.Close()
-
-	u, err := url.Parse("http://myuser:mypass@localhost:8886/teststream/whep?param=value")
-	require.NoError(t, err)
-
-	tr := &http.Transport{}
-	defer tr.CloseIdleConnections()
-	hc := &http.Client{Transport: tr}
-
-	wc := &webrtc.WHIPClient{
-		HTTPClient: hc,
-		URL:        u,
-		Log:        test.NilLogger{},
-	}
-
-	writerDone := make(chan struct{})
-	defer func() { <-writerDone }()
-
-	writerTerminate := make(chan struct{})
-	defer close(writerTerminate)
-
-	go func() {
-		defer close(writerDone)
-		for {
-			select {
-			case <-time.After(100 * time.Millisecond):
-			case <-writerTerminate:
-				return
-			}
-			stream.WriteUnit(desc.Medias[0], desc.Medias[0].Formats[0], &unit.H264{
-				Base: unit.Base{
-					NTP: time.Time{},
-				},
-				AU: [][]byte{
-					{5, 1},
-				},
-			})
-		}
-	}()
-
-	tracks, err := wc.Read(context.Background())
-	require.NoError(t, err)
-	defer checkClose(t, wc.Close)
-
-	pkt, err := tracks[0].ReadRTP()
-	require.NoError(t, err)
-	require.Equal(t, &rtp.Packet{
-		Header: rtp.Header{
-			Version:        2,
-			Marker:         true,
-			PayloadType:    100,
-			SequenceNumber: pkt.SequenceNumber,
-			Timestamp:      pkt.Timestamp,
-			SSRC:           pkt.SSRC,
-			CSRC:           []uint32{},
-		},
-		Payload: []byte{
-			0x18, 0x00, 0x19, 0x67, 0x42, 0xc0, 0x28, 0xd9,
-			0x00, 0x78, 0x02, 0x27, 0xe5, 0x84, 0x00, 0x00,
-			0x03, 0x00, 0x04, 0x00, 0x00, 0x03, 0x00, 0xf0,
-			0x3c, 0x60, 0xc9, 0x20, 0x00, 0x04, 0x08, 0x06,
-			0x07, 0x08, 0x00, 0x02, 0x05, 0x01,
-		},
-	}, pkt)
-}
-
-func TestServerPostNotFound(t *testing.T) {
-	s := initializeTestServer(t)
 	defer s.Close()
 
 	tr := &http.Transport{}
@@ -480,7 +694,7 @@ func TestServerPatchNotFound(t *testing.T) {
 	offer, err := pc.CreateOffer(nil)
 	require.NoError(t, err)
 
-	frag, err := webrtc.ICEFragmentMarshal(offer.SDP, []*pwebrtc.ICECandidateInit{{
+	frag, err := whip.ICEFragmentMarshal(offer.SDP, []*pwebrtc.ICECandidateInit{{
 		Candidate:     "mycandidate",
 		SDPMLineIndex: uint16Ptr(0),
 	}})
@@ -552,5 +766,5 @@ func TestICEServerClientOnly(t *testing.T) {
 	require.Equal(t, len(s.ICEServers), len(clientICEServers))
 	serverICEServers, err := s.generateICEServers(false)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(serverICEServers))
+	require.Empty(t, serverICEServers)
 }

@@ -4,8 +4,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/bluenviron/mediacommon/pkg/formats/fmp4"
-	"github.com/bluenviron/mediacommon/pkg/formats/fmp4/seekablebuffer"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4/seekablebuffer"
 )
 
 const (
@@ -94,7 +94,7 @@ func (w *muxerFMP4) writeSample(
 
 		partDurationMP4 := durationGoToMp4(partDuration, w.curTrack.timeScale)
 
-		if (w.curTrack.lastDTS - w.curTrack.firstDTS) > partDurationMP4 {
+		if (w.curTrack.lastDTS - w.curTrack.firstDTS) >= partDurationMP4 {
 			err := w.innerFlush(false)
 			if err != nil {
 				return err

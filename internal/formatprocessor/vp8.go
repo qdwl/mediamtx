@@ -7,57 +7,48 @@ import (
 
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/gortsplib/v4/pkg/format/rtpvp8"
-	"github.com/bluenviron/gortsplib/v4/pkg/rtptime"
 	"github.com/pion/rtp"
 
+	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/unit"
 )
 
-type formatProcessorVP8 struct {
-	udpMaxPayloadSize int
-	format            *format.VP8
-	timeEncoder       *rtptime.Encoder
-	encoder           *rtpvp8.Encoder
-	decoder           *rtpvp8.Decoder
+type vp8 struct {
+	UDPMaxPayloadSize  int
+	Format             *format.VP8
+	GenerateRTPPackets bool
+	Parent             logger.Writer
+
+	encoder     *rtpvp8.Encoder
+	decoder     *rtpvp8.Decoder
+	randomStart uint32
 }
 
-func newVP8(
-	udpMaxPayloadSize int,
-	forma *format.VP8,
-	generateRTPPackets bool,
-) (*formatProcessorVP8, error) {
-	t := &formatProcessorVP8{
-		udpMaxPayloadSize: udpMaxPayloadSize,
-		format:            forma,
-	}
-
-	if generateRTPPackets {
+func (t *vp8) initialize() error {
+	if t.GenerateRTPPackets {
 		err := t.createEncoder()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		t.timeEncoder = &rtptime.Encoder{
-			ClockRate: forma.ClockRate(),
-		}
-		err = t.timeEncoder.Initialize()
+		t.randomStart, err = randUint32()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return t, nil
+	return nil
 }
 
-func (t *formatProcessorVP8) createEncoder() error {
+func (t *vp8) createEncoder() error {
 	t.encoder = &rtpvp8.Encoder{
-		PayloadMaxSize: t.udpMaxPayloadSize - 12,
-		PayloadType:    t.format.PayloadTyp,
+		PayloadMaxSize: t.UDPMaxPayloadSize - 12,
+		PayloadType:    t.Format.PayloadTyp,
 	}
 	return t.encoder.Init()
 }
 
-func (t *formatProcessorVP8) ProcessUnit(uu unit.Unit) error { //nolint:dupl
+func (t *vp8) ProcessUnit(uu unit.Unit) error { //nolint:dupl
 	u := uu.(*unit.VP8)
 
 	pkts, err := t.encoder.Encode(u.Frame)
@@ -66,20 +57,19 @@ func (t *formatProcessorVP8) ProcessUnit(uu unit.Unit) error { //nolint:dupl
 	}
 	u.RTPPackets = pkts
 
-	ts := t.timeEncoder.Encode(u.PTS)
 	for _, pkt := range u.RTPPackets {
-		pkt.Timestamp += ts
+		pkt.Timestamp += t.randomStart + uint32(u.PTS)
 	}
 
 	return nil
 }
 
-func (t *formatProcessorVP8) ProcessRTPPacket( //nolint:dupl
+func (t *vp8) ProcessRTPPacket( //nolint:dupl
 	pkt *rtp.Packet,
 	ntp time.Time,
-	pts time.Duration,
+	pts int64,
 	hasNonRTSPReaders bool,
-) (Unit, error) {
+) (unit.Unit, error) {
 	u := &unit.VP8{
 		Base: unit.Base{
 			RTPPackets: []*rtp.Packet{pkt},
@@ -92,16 +82,16 @@ func (t *formatProcessorVP8) ProcessRTPPacket( //nolint:dupl
 	pkt.Header.Padding = false
 	pkt.PaddingSize = 0
 
-	if pkt.MarshalSize() > t.udpMaxPayloadSize {
+	if pkt.MarshalSize() > t.UDPMaxPayloadSize {
 		return nil, fmt.Errorf("payload size (%d) is greater than maximum allowed (%d)",
-			pkt.MarshalSize(), t.udpMaxPayloadSize)
+			pkt.MarshalSize(), t.UDPMaxPayloadSize)
 	}
 
 	// decode from RTP
 	if hasNonRTSPReaders || t.decoder != nil {
 		if t.decoder == nil {
 			var err error
-			t.decoder, err = t.format.CreateDecoder()
+			t.decoder, err = t.Format.CreateDecoder()
 			if err != nil {
 				return nil, err
 			}

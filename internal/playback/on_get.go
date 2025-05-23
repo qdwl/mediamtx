@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bluenviron/mediacommon/pkg/formats/fmp4"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
+	"github.com/bluenviron/mediamtx/internal/recordstore"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,7 +42,7 @@ func parseDuration(raw string) (time.Duration, error) {
 
 func seekAndMux(
 	recordFormat conf.RecordFormat,
-	segments []*Segment,
+	segments []*recordstore.Segment,
 	start time.Time,
 	duration time.Duration,
 	m muxer,
@@ -56,7 +57,7 @@ func seekAndMux(
 		}
 		defer f.Close()
 
-		firstInit, err = segmentFMP4ReadInit(f)
+		firstInit, _, err = segmentFMP4ReadHeader(f)
 		if err != nil {
 			return err
 		}
@@ -65,21 +66,22 @@ func seekAndMux(
 
 		segmentStartOffset := start.Sub(segments[0].Start)
 
-		segmentMaxElapsed, err := segmentFMP4SeekAndMuxParts(f, segmentStartOffset, duration, firstInit, m)
+		segmentDuration, err := segmentFMP4SeekAndMuxParts(f, segmentStartOffset, duration, firstInit, m)
 		if err != nil {
 			return err
 		}
 
-		segmentEnd = start.Add(segmentMaxElapsed)
+		segmentEnd = start.Add(segmentDuration)
 
 		for _, seg := range segments[1:] {
-			f, err := os.Open(seg.Fpath)
+			f, err = os.Open(seg.Fpath)
 			if err != nil {
 				return err
 			}
 			defer f.Close()
 
-			init, err := segmentFMP4ReadInit(f)
+			var init *fmp4.Init
+			init, _, err = segmentFMP4ReadHeader(f)
 			if err != nil {
 				return err
 			}
@@ -90,12 +92,13 @@ func seekAndMux(
 
 			segmentStartOffset := seg.Start.Sub(start)
 
-			segmentMaxElapsed, err := segmentFMP4MuxParts(f, segmentStartOffset, duration, firstInit, m)
+			var segmentDuration time.Duration
+			segmentDuration, err = segmentFMP4MuxParts(f, segmentStartOffset, duration, firstInit, m)
 			if err != nil {
 				return err
 			}
 
-			segmentEnd = start.Add(segmentMaxElapsed)
+			segmentEnd = start.Add(segmentDuration)
 		}
 
 		err = m.flush()
@@ -109,22 +112,22 @@ func seekAndMux(
 	return fmt.Errorf("MPEG-TS format is not supported yet")
 }
 
-func (p *Server) onGet(ctx *gin.Context) {
+func (s *Server) onGet(ctx *gin.Context) {
 	pathName := ctx.Query("path")
 
-	if !p.doAuth(ctx, pathName) {
+	if !s.doAuth(ctx, pathName) {
 		return
 	}
 
 	start, err := time.Parse(time.RFC3339, ctx.Query("start"))
 	if err != nil {
-		p.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid start: %w", err))
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid start: %w", err))
 		return
 	}
 
 	duration, err := parseDuration(ctx.Query("duration"))
 	if err != nil {
-		p.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid duration: %w", err))
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid duration: %w", err))
 		return
 	}
 
@@ -140,22 +143,23 @@ func (p *Server) onGet(ctx *gin.Context) {
 		m = &muxerMP4{w: ww}
 
 	default:
-		p.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid format: %s", format))
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid format: %s", format))
 		return
 	}
 
-	pathConf, err := p.safeFindPathConf(pathName)
+	pathConf, err := s.safeFindPathConf(pathName)
 	if err != nil {
-		p.writeError(ctx, http.StatusBadRequest, err)
+		s.writeError(ctx, http.StatusBadRequest, err)
 		return
 	}
 
-	segments, err := findSegmentsInTimespan(pathConf, pathName, start, duration)
+	end := start.Add(duration)
+	segments, err := recordstore.FindSegments(pathConf, pathName, &start, &end)
 	if err != nil {
-		if errors.Is(err, errNoSegmentsFound) {
-			p.writeError(ctx, http.StatusNotFound, err)
+		if errors.Is(err, recordstore.ErrNoSegmentsFound) {
+			s.writeError(ctx, http.StatusNotFound, err)
 		} else {
-			p.writeError(ctx, http.StatusBadRequest, err)
+			s.writeError(ctx, http.StatusBadRequest, err)
 		}
 		return
 	}
@@ -170,16 +174,16 @@ func (p *Server) onGet(ctx *gin.Context) {
 
 		// nothing has been written yet; send back JSON
 		if !ww.written {
-			if errors.Is(err, errNoSegmentsFound) {
-				p.writeError(ctx, http.StatusNotFound, err)
+			if errors.Is(err, recordstore.ErrNoSegmentsFound) {
+				s.writeError(ctx, http.StatusNotFound, err)
 			} else {
-				p.writeError(ctx, http.StatusBadRequest, err)
+				s.writeError(ctx, http.StatusBadRequest, err)
 			}
 			return
 		}
 
 		// something has already been written: abort and write logs only
-		p.Log(logger.Error, err.Error())
+		s.Log(logger.Error, err.Error())
 		return
 	}
 }

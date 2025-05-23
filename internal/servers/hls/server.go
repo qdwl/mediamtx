@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 
@@ -17,6 +18,10 @@ import (
 // ErrMuxerNotFound is returned when a muxer is not found.
 var ErrMuxerNotFound = errors.New("muxer not found")
 
+func interfaceIsEmpty(i interface{}) bool {
+	return reflect.ValueOf(i).Kind() != reflect.Ptr || reflect.ValueOf(i).IsNil()
+}
+
 type serverGetMuxerRes struct {
 	muxer *muxer
 	err   error
@@ -25,6 +30,7 @@ type serverGetMuxerRes struct {
 type serverGetMuxerReq struct {
 	path           string
 	remoteAddr     string
+	query          string
 	sourceOnDemand bool
 	res            chan serverGetMuxerRes
 }
@@ -48,7 +54,12 @@ type serverAPIMuxersGetReq struct {
 	res  chan serverAPIMuxersGetRes
 }
 
+type serverMetrics interface {
+	SetHLSServer(defs.APIHLSServer)
+}
+
 type serverPathManager interface {
+	SetHLSServer(*Server) []defs.Path
 	FindPathConf(req defs.PathFindPathConfReq) (*conf.Path, error)
 	AddReader(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error)
 }
@@ -63,17 +74,18 @@ type Server struct {
 	Encryption      bool
 	ServerKey       string
 	ServerCert      string
+	AllowOrigin     string
+	TrustedProxies  conf.IPNetworks
 	AlwaysRemux     bool
 	Variant         conf.HLSVariant
 	SegmentCount    int
-	SegmentDuration conf.StringDuration
-	PartDuration    conf.StringDuration
+	SegmentDuration conf.Duration
+	PartDuration    conf.Duration
 	SegmentMaxSize  conf.StringSize
-	AllowOrigin     string
-	TrustedProxies  conf.IPNetworks
 	Directory       string
-	ReadTimeout     conf.StringDuration
-	WriteQueueSize  int
+	ReadTimeout     conf.Duration
+	MuxerCloseAfter conf.Duration
+	Metrics         serverMetrics
 	PathManager     serverPathManager
 	Parent          serverParent
 
@@ -128,6 +140,10 @@ func (s *Server) Initialize() error {
 	s.wg.Add(1)
 	go s.run()
 
+	if !interfaceIsEmpty(s.Metrics) {
+		s.Metrics.SetHLSServer(s)
+	}
+
 	return nil
 }
 
@@ -139,6 +155,11 @@ func (s *Server) Log(level logger.Level, format string, args ...interface{}) {
 // Close closes the server.
 func (s *Server) Close() {
 	s.Log(logger.Info, "listener is closing")
+
+	if !interfaceIsEmpty(s.Metrics) {
+		s.Metrics.SetHLSServer(nil)
+	}
+
 	s.ctxCancel()
 	s.wg.Wait()
 }
@@ -146,13 +167,26 @@ func (s *Server) Close() {
 func (s *Server) run() {
 	defer s.wg.Done()
 
+	readyPaths := s.PathManager.SetHLSServer(s)
+	defer s.PathManager.SetHLSServer(nil)
+
+	if s.AlwaysRemux {
+		for _, pa := range readyPaths {
+			if !pa.SafeConf().SourceOnDemand {
+				if _, ok := s.muxers[pa.Name()]; !ok {
+					s.createMuxer(pa.Name(), "", "")
+				}
+			}
+		}
+	}
+
 outer:
 	for {
 		select {
 		case pa := <-s.chPathReady:
 			if s.AlwaysRemux && !pa.SafeConf().SourceOnDemand {
 				if _, ok := s.muxers[pa.Name()]; !ok {
-					s.createMuxer(pa.Name(), "")
+					s.createMuxer(pa.Name(), "", "")
 				}
 			}
 
@@ -171,7 +205,7 @@ outer:
 			case s.AlwaysRemux && !req.sourceOnDemand:
 				req.res <- serverGetMuxerRes{err: fmt.Errorf("muxer is waiting to be created")}
 			default:
-				req.res <- serverGetMuxerRes{muxer: s.createMuxer(req.path, req.remoteAddr)}
+				req.res <- serverGetMuxerRes{muxer: s.createMuxer(req.path, req.remoteAddr, req.query)}
 			}
 
 		case c := <-s.chCloseMuxer:
@@ -215,7 +249,7 @@ outer:
 	s.httpServer.close()
 }
 
-func (s *Server) createMuxer(pathName string, remoteAddr string) *muxer {
+func (s *Server) createMuxer(pathName string, remoteAddr string, query string) *muxer {
 	r := &muxer{
 		parentCtx:       s.ctx,
 		remoteAddr:      remoteAddr,
@@ -225,11 +259,12 @@ func (s *Server) createMuxer(pathName string, remoteAddr string) *muxer {
 		partDuration:    s.PartDuration,
 		segmentMaxSize:  s.SegmentMaxSize,
 		directory:       s.Directory,
-		writeQueueSize:  s.WriteQueueSize,
 		wg:              &s.wg,
 		pathName:        pathName,
 		pathManager:     s.PathManager,
 		parent:          s,
+		query:           query,
+		closeAfter:      s.MuxerCloseAfter,
 	}
 	r.initialize()
 	s.muxers[pathName] = r

@@ -50,12 +50,20 @@ func TestStreamIDUnmarshal(t *testing.T) {
 				pass: "mypass",
 			},
 		},
+		{
+			"issue 3701",
+			"#!::bmd_uuid=0e1df79f-77e6-465c-b099-29a616e964f7,bmd_name=rdt-wp-003,r=test3,m=publish",
+			streamID{
+				mode: streamIDModePublish,
+				path: "test3",
+			},
+		},
 	} {
 		t.Run(ca.name, func(t *testing.T) {
-			var streamID streamID
-			err := streamID.unmarshal(ca.raw)
+			var sid streamID
+			err := sid.unmarshal(ca.raw)
 			require.NoError(t, err)
-			require.Equal(t, ca.dec, streamID)
+			require.Equal(t, ca.dec, sid)
 		})
 	}
 }

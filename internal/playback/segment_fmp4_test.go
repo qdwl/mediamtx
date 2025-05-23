@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
-	"github.com/bluenviron/mediacommon/pkg/formats/fmp4"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 	"github.com/bluenviron/mediamtx/internal/test"
 )
 
@@ -48,7 +48,7 @@ func writeBenchInit(f io.WriteSeeker) {
 	}
 }
 
-func BenchmarkFMP4ReadInit(b *testing.B) {
+func BenchmarkFMP4ReadHeader(b *testing.B) {
 	f, err := os.CreateTemp(os.TempDir(), "mediamtx-playback-fmp4-")
 	if err != nil {
 		panic(err)
@@ -60,13 +60,13 @@ func BenchmarkFMP4ReadInit(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		func() {
-			f, err := os.Open(f.Name())
+			f, err = os.Open(f.Name())
 			if err != nil {
 				panic(err)
 			}
 			defer f.Close()
 
-			_, err = segmentFMP4ReadInit(f)
+			_, _, err = segmentFMP4ReadHeader(f)
 			if err != nil {
 				panic(err)
 			}

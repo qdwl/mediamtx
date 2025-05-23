@@ -48,13 +48,24 @@ func TestSource(t *testing.T) {
 				require.NoError(t, err)
 				defer nconn.Close()
 
-				conn, _, _, err := rtmp.NewServerConn(nconn)
+				conn := &rtmp.Conn{
+					RW: nconn,
+				}
+				err = conn.Initialize()
 				require.NoError(t, err)
 
-				w, err := rtmp.NewWriter(conn, test.FormatH264, test.FormatMPEG4Audio)
+				w := &rtmp.Writer{
+					Conn:       conn,
+					VideoTrack: test.FormatH264,
+					AudioTrack: test.FormatMPEG4Audio,
+				}
+				err = w.Initialize()
 				require.NoError(t, err)
 
-				err = w.WriteH264(0, 0, true, [][]byte{{0x05, 0x02, 0x03, 0x04}})
+				err = w.WriteH264(2*time.Second, 2*time.Second, [][]byte{{5, 2, 3, 4}})
+				require.NoError(t, err)
+
+				err = w.WriteH264(3*time.Second, 3*time.Second, [][]byte{{5, 2, 3, 4}})
 				require.NoError(t, err)
 			}()
 
@@ -64,24 +75,24 @@ func TestSource(t *testing.T) {
 				te = test.NewSourceTester(
 					func(p defs.StaticSourceParent) defs.StaticSource {
 						return &Source{
-							ResolvedSource: "rtmp://localhost/teststream",
-							ReadTimeout:    conf.StringDuration(10 * time.Second),
-							WriteTimeout:   conf.StringDuration(10 * time.Second),
-							Parent:         p,
+							ReadTimeout:  conf.Duration(10 * time.Second),
+							WriteTimeout: conf.Duration(10 * time.Second),
+							Parent:       p,
 						}
 					},
+					"rtmp://localhost/teststream",
 					&conf.Path{},
 				)
 			} else {
 				te = test.NewSourceTester(
 					func(p defs.StaticSourceParent) defs.StaticSource {
 						return &Source{
-							ResolvedSource: "rtmps://localhost/teststream",
-							ReadTimeout:    conf.StringDuration(10 * time.Second),
-							WriteTimeout:   conf.StringDuration(10 * time.Second),
-							Parent:         p,
+							ReadTimeout:  conf.Duration(10 * time.Second),
+							WriteTimeout: conf.Duration(10 * time.Second),
+							Parent:       p,
 						}
 					},
+					"rtmps://localhost/teststream",
 					&conf.Path{
 						SourceFingerprint: "33949E05FFFB5FF3E8AA16F8213A6251B4D9363804BA53233C4DA9A46D6F2739",
 					},

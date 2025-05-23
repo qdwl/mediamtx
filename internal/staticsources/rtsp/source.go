@@ -7,11 +7,12 @@ import (
 	"github.com/bluenviron/gortsplib/v4"
 	"github.com/bluenviron/gortsplib/v4/pkg/base"
 	"github.com/bluenviron/gortsplib/v4/pkg/headers"
-	"github.com/pion/rtp"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
+	"github.com/bluenviron/mediamtx/internal/counterdumper"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
+	"github.com/bluenviron/mediamtx/internal/protocols/rtsp"
 	"github.com/bluenviron/mediamtx/internal/protocols/tls"
 )
 
@@ -62,9 +63,8 @@ func createRangeHeader(cnf *conf.Path) (*headers.Range, error) {
 
 // Source is a RTSP static source.
 type Source struct {
-	ResolvedSource string
-	ReadTimeout    conf.StringDuration
-	WriteTimeout   conf.StringDuration
+	ReadTimeout    conf.Duration
+	WriteTimeout   conf.Duration
 	WriteQueueSize int
 	Parent         defs.StaticSourceParent
 }
@@ -78,7 +78,37 @@ func (s *Source) Log(level logger.Level, format string, args ...interface{}) {
 func (s *Source) Run(params defs.StaticSourceRunParams) error {
 	s.Log(logger.Debug, "connecting")
 
-	decodeErrLogger := logger.NewLimitedLogger(s)
+	packetsLost := &counterdumper.CounterDumper{
+		OnReport: func(val uint64) {
+			s.Log(logger.Warn, "%d RTP %s lost",
+				val,
+				func() string {
+					if val == 1 {
+						return "packet"
+					}
+					return "packets"
+				}())
+		},
+	}
+
+	packetsLost.Start()
+	defer packetsLost.Stop()
+
+	decodeErrors := &counterdumper.CounterDumper{
+		OnReport: func(val uint64) {
+			s.Log(logger.Warn, "%d decode %s",
+				val,
+				func() string {
+					if val == 1 {
+						return "error"
+					}
+					return "errors"
+				}())
+		},
+	}
+
+	decodeErrors.Start()
+	defer decodeErrors.Stop()
 
 	c := &gortsplib.Client{
 		Transport:      params.Conf.RTSPTransport.Transport,
@@ -96,15 +126,15 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 		OnTransportSwitch: func(err error) {
 			s.Log(logger.Warn, err.Error())
 		},
-		OnPacketLost: func(err error) {
-			decodeErrLogger.Log(logger.Warn, err.Error())
+		OnPacketsLost: func(lost uint64) {
+			packetsLost.Add(lost)
 		},
-		OnDecodeError: func(err error) {
-			decodeErrLogger.Log(logger.Warn, err.Error())
+		OnDecodeError: func(_ error) {
+			decodeErrors.Increase()
 		},
 	}
 
-	u, err := base.ParseURL(s.ResolvedSource)
+	u, err := base.ParseURL(params.ResolvedSource)
 	if err != nil {
 		return err
 	}
@@ -138,21 +168,12 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 
 			defer s.Parent.SetNotReady(defs.PathSourceStaticSetNotReadyReq{})
 
-			for _, medi := range desc.Medias {
-				for _, forma := range medi.Formats {
-					cmedi := medi
-					cforma := forma
-
-					c.OnPacketRTP(cmedi, cforma, func(pkt *rtp.Packet) {
-						pts, ok := c.PacketPTS(cmedi, pkt)
-						if !ok {
-							return
-						}
-
-						res.Stream.WriteRTPPacket(cmedi, cforma, pkt, time.Now(), pts)
-					})
-				}
-			}
+			rtsp.ToStream(
+				c,
+				desc.Medias,
+				params.Conf,
+				res.Stream,
+				s)
 
 			rangeHeader, err := createRangeHeader(params.Conf)
 			if err != nil {

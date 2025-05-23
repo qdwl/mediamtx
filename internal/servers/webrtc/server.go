@@ -11,31 +11,35 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pion/ice/v4"
 	"github.com/pion/logging"
-	pwebrtc "github.com/pion/webrtc/v3"
+	pwebrtc "github.com/pion/webrtc/v4"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/logger"
-	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
 	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
 	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
 const (
-	webrtcTurnSecretExpiration = 24 * 3600 * time.Second
-	webrtcPayloadMaxSize       = 1188 // 1200 - 12 (RTP header)
+	webrtcTurnSecretExpiration = 24 * time.Hour
 )
 
 // ErrSessionNotFound is returned when a session is not found.
 var ErrSessionNotFound = errors.New("session not found")
+
+func interfaceIsEmpty(i interface{}) bool {
+	return reflect.ValueOf(i).Kind() != reflect.Ptr || reflect.ValueOf(i).IsNil()
+}
 
 type nilWriter struct{}
 
@@ -66,14 +70,14 @@ func randInt63n(n int64) (int64, error) {
 		return r & (n - 1), nil
 	}
 
-	max := int64((1 << 63) - 1 - (1<<63)%uint64(n))
+	maxVal := int64((1 << 63) - 1 - (1<<63)%uint64(n))
 
 	v, err := randInt63()
 	if err != nil {
 		return 0, err
 	}
 
-	for v > max {
+	for v > maxVal {
 		v, err = randInt63()
 		if err != nil {
 			return 0, err
@@ -134,14 +138,12 @@ type webRTCNewSessionRes struct {
 }
 
 type webRTCNewSessionReq struct {
-	pathName   string
-	remoteAddr string
-	query      string
-	user       string
-	pass       string
-	offer      []byte
-	publish    bool
-	res        chan webRTCNewSessionRes
+	pathName    string
+	remoteAddr  string
+	offer       []byte
+	publish     bool
+	httpRequest *http.Request
+	res         chan webRTCNewSessionRes
 }
 
 type webRTCAddSessionCandidatesRes struct {
@@ -166,6 +168,10 @@ type webRTCDeleteSessionReq struct {
 	res      chan webRTCDeleteSessionRes
 }
 
+type serverMetrics interface {
+	SetWebRTCServer(defs.APIWebRTCServer)
+}
+
 type serverPathManager interface {
 	FindPathConf(req defs.PathFindPathConfReq) (*conf.Path, error)
 	AddPublisher(req defs.PathAddPublisherReq) (defs.Path, error)
@@ -184,15 +190,18 @@ type Server struct {
 	ServerCert            string
 	AllowOrigin           string
 	TrustedProxies        conf.IPNetworks
-	ReadTimeout           conf.StringDuration
-	WriteQueueSize        int
+	ReadTimeout           conf.Duration
 	LocalUDPAddress       string
 	LocalTCPAddress       string
 	IPsFromInterfaces     bool
 	IPsFromInterfacesList []string
 	AdditionalHosts       []string
 	ICEServers            []conf.WebRTCICEServer
+	HandshakeTimeout      conf.Duration
+	TrackGatherTimeout    conf.Duration
+	STUNGatherTimeout     conf.Duration
 	ExternalCmdPool       *externalcmd.Pool
+	Metrics               serverMetrics
 	PathManager           serverPathManager
 	Parent                serverParent
 
@@ -201,7 +210,8 @@ type Server struct {
 	httpServer       *httpServer
 	udpMuxLn         net.PacketConn
 	tcpMuxLn         net.Listener
-	api              *pwebrtc.API
+	iceUDPMux        ice.UDPMux
+	iceTCPMux        ice.TCPMux
 	sessions         map[*session]struct{}
 	sessionsBySecret map[uuid.UUID]*session
 
@@ -252,13 +262,6 @@ func (s *Server) Initialize() error {
 		return err
 	}
 
-	apiConf := webrtc.APIConf{
-		LocalRandomUDP:        false,
-		IPsFromInterfaces:     s.IPsFromInterfaces,
-		IPsFromInterfacesList: s.IPsFromInterfacesList,
-		AdditionalHosts:       s.AdditionalHosts,
-	}
-
 	if s.LocalUDPAddress != "" {
 		s.udpMuxLn, err = net.ListenPacket(restrictnetwork.Restrict("udp", s.LocalUDPAddress))
 		if err != nil {
@@ -266,7 +269,7 @@ func (s *Server) Initialize() error {
 			ctxCancel()
 			return err
 		}
-		apiConf.ICEUDPMux = pwebrtc.NewICEUDPMux(webrtcNilLogger, s.udpMuxLn)
+		s.iceUDPMux = pwebrtc.NewICEUDPMux(webrtcNilLogger, s.udpMuxLn)
 	}
 
 	if s.LocalTCPAddress != "" {
@@ -277,16 +280,7 @@ func (s *Server) Initialize() error {
 			ctxCancel()
 			return err
 		}
-		apiConf.ICETCPMux = pwebrtc.NewICETCPMux(webrtcNilLogger, s.tcpMuxLn, 8)
-	}
-
-	s.api, err = webrtc.NewAPI(apiConf)
-	if err != nil {
-		s.udpMuxLn.Close()
-		s.tcpMuxLn.Close()
-		s.httpServer.close()
-		ctxCancel()
-		return err
+		s.iceTCPMux = pwebrtc.NewICETCPMux(webrtcNilLogger, s.tcpMuxLn, 8)
 	}
 
 	str := "listener opened on " + s.Address + " (HTTP)"
@@ -300,6 +294,10 @@ func (s *Server) Initialize() error {
 
 	go s.run()
 
+	if !interfaceIsEmpty(s.Metrics) {
+		s.Metrics.SetWebRTCServer(s)
+	}
+
 	return nil
 }
 
@@ -311,6 +309,11 @@ func (s *Server) Log(level logger.Level, format string, args ...interface{}) {
 // Close closes the server.
 func (s *Server) Close() {
 	s.Log(logger.Info, "listener is closing")
+
+	if !interfaceIsEmpty(s.Metrics) {
+		s.Metrics.SetWebRTCServer(nil)
+	}
+
 	s.ctxCancel()
 	<-s.done
 }
@@ -325,14 +328,20 @@ outer:
 		select {
 		case req := <-s.chNewSession:
 			sx := &session{
-				parentCtx:       s.ctx,
-				writeQueueSize:  s.WriteQueueSize,
-				api:             s.api,
-				req:             req,
-				wg:              &wg,
-				externalCmdPool: s.ExternalCmdPool,
-				pathManager:     s.PathManager,
-				parent:          s,
+				parentCtx:             s.ctx,
+				ipsFromInterfaces:     s.IPsFromInterfaces,
+				ipsFromInterfacesList: s.IPsFromInterfacesList,
+				additionalHosts:       s.AdditionalHosts,
+				iceUDPMux:             s.iceUDPMux,
+				iceTCPMux:             s.iceTCPMux,
+				handshakeTimeout:      s.HandshakeTimeout,
+				trackGatherTimeout:    s.TrackGatherTimeout,
+				stunGatherTimeout:     s.STUNGatherTimeout,
+				req:                   req,
+				wg:                    &wg,
+				externalCmdPool:       s.ExternalCmdPool,
+				pathManager:           s.PathManager,
+				parent:                s,
 			}
 			sx.initialize()
 			s.sessions[sx] = struct{}{}

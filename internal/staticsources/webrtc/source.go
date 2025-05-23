@@ -8,20 +8,20 @@ import (
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	"github.com/bluenviron/gortsplib/v4/pkg/rtptime"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/tls"
 	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
+	"github.com/bluenviron/mediamtx/internal/protocols/whip"
+	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
 // Source is a WebRTC static source.
 type Source struct {
-	ResolvedSource string
-	ReadTimeout    conf.StringDuration
-	Parent         defs.StaticSourceParent
+	ReadTimeout conf.Duration
+	Parent      defs.StaticSourceParent
 }
 
 // Log implements logger.Writer.
@@ -33,7 +33,7 @@ func (s *Source) Log(level logger.Level, format string, args ...interface{}) {
 func (s *Source) Run(params defs.StaticSourceRunParams) error {
 	s.Log(logger.Debug, "connecting")
 
-	u, err := url.Parse(s.ResolvedSource)
+	u, err := url.Parse(params.ResolvedSource)
 	if err != nil {
 		return err
 	}
@@ -45,22 +45,28 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 	}
 	defer tr.CloseIdleConnections()
 
-	client := webrtc.WHIPClient{
+	client := whip.Client{
 		HTTPClient: &http.Client{
 			Timeout:   time.Duration(s.ReadTimeout),
 			Transport: tr,
 		},
-		URL: u,
-		Log: s,
+		UseAbsoluteTimestamp: params.Conf.UseAbsoluteTimestamp,
+		URL:                  u,
+		Log:                  s,
 	}
 
-	tracks, err := client.Read(params.Context)
+	err = client.Initialize(params.Context)
 	if err != nil {
 		return err
 	}
 	defer client.Close() //nolint:errcheck
 
-	medias := webrtc.TracksToMedias(tracks)
+	var stream *stream.Stream
+
+	medias, err := webrtc.ToStream(client.PeerConnection(), &stream)
+	if err != nil {
+		return err
+	}
 
 	rres := s.Parent.SetReady(defs.PathSourceStaticSetReadyReq{
 		Desc:               &description.Session{Medias: medias},
@@ -72,29 +78,9 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 
 	defer s.Parent.SetNotReady(defs.PathSourceStaticSetNotReadyReq{})
 
-	timeDecoder := rtptime.NewGlobalDecoder()
+	stream = rres.Stream
 
-	for i, media := range medias {
-		ci := i
-		cmedia := media
-		trackWrapper := &webrtc.TrackWrapper{ClockRat: cmedia.Formats[0].ClockRate()}
-
-		go func() {
-			for {
-				pkt, err := tracks[ci].ReadRTP()
-				if err != nil {
-					return
-				}
-
-				pts, ok := timeDecoder.Decode(trackWrapper, pkt)
-				if !ok {
-					continue
-				}
-
-				rres.Stream.WriteRTPPacket(cmedia, cmedia.Formats[0], pkt, time.Now(), pts)
-			}
-		}()
-	}
+	client.StartReading()
 
 	return client.Wait(params.Context)
 }
@@ -102,7 +88,7 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 // APISourceDescribe implements StaticSource.
 func (*Source) APISourceDescribe() defs.APIPathSourceOrReader {
 	return defs.APIPathSourceOrReader{
-		Type: "webrtcSource",
+		Type: "webRTCSource",
 		ID:   "",
 	}
 }

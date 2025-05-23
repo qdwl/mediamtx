@@ -11,36 +11,36 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-go@v3
       with:
-        go-version: "1.21"
+        go-version: "1.23"
 
-    - run: touch internal/servers/hls/hls.min.js
+    - run: go generate ./...
 
     - uses: golangci/golangci-lint-action@v4
       with:
-        version: v1.55.0
+        version: v1.61.0
 
   mod_tidy:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3
       with:
-        go-version: "1.21"
+        go-version: "1.23"
 
-    - run: |
-        go mod tidy
-        git diff --exit-code
+    - run: make lint-mod-tidy
 
   api_docs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - run: make apidocs-lint
+    - run: make lint-apidocs

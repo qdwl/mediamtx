@@ -21,6 +21,30 @@ components:
         error:
           type: string
 
+    AuthInternalUser:
+      type: object
+      properties:
+        user:
+          type: string
+        pass:
+          type: string
+        ips:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthInternalUserPermission'
+
+    AuthInternalUserPermission:
+      type: object
+      properties:
+        action:
+          type: string
+        path:
+          type: string
+
     GlobalConf:
       type: object
       properties:
@@ -33,6 +57,8 @@ components:
             type: string
         logFile:
           type: string
+        sysLogPrefix:
+          type: string
         readTimeout:
           type: string
         writeTimeout:
@@ -41,16 +67,6 @@ components:
           type: integer
         udpMaxPayloadSize:
           type: integer
-        externalAuthenticationURL:
-          type: string
-        metrics:
-          type: boolean
-        metricsAddress:
-          type: string
-        pprof:
-          type: boolean
-        pprofAddress:
-          type: string
         runOnConnect:
           type: string
         runOnConnectRestart:
@@ -58,26 +74,112 @@ components:
         runOnDisconnect:
           type: string
 
-        # API
+        # Authentication
+        authMethod:
+          type: string
+        authInternalUsers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthInternalUser'
+        authHTTPAddress:
+          type: string
+        authHTTPExclude:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthInternalUserPermission'
+        authJWTJWKS:
+          type: string
+        authJWTJWKSFingerprint:
+          type: string
+        authJWTClaimKey:
+          type: string
+        authJWTExclude:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthInternalUserPermission'
+        authJWTInHTTPQuery:
+          type: boolean
+
+        # Control API
         api:
           type: boolean
         apiAddress:
           type: string
+        apiEncryption:
+          type: boolean
+        apiServerKey:
+          type: string
+        apiServerCert:
+          type: string
+        apiAllowOrigin:
+          type: string
+        apiTrustedProxies:
+          type: array
+          items:
+            type: string
+
+        # Metrics
+        metrics:
+          type: boolean
+        metricsAddress:
+          type: string
+        metricsEncryption:
+          type: boolean
+        metricsServerKey:
+          type: string
+        metricsServerCert:
+          type: string
+        metricsAllowOrigin:
+          type: string
+        metricsTrustedProxies:
+          type: array
+          items:
+            type: string
+
+        # PPROF
+        pprof:
+          type: boolean
+        pprofAddress:
+          type: string
+        pprofEncryption:
+          type: boolean
+        pprofServerKey:
+          type: string
+        pprofServerCert:
+          type: string
+        pprofAllowOrigin:
+          type: string
+        pprofTrustedProxies:
+          type: array
+          items:
+            type: string
 
         # Playback server
         playback:
           type: boolean
         playbackAddress:
           type: string
+        playbackEncryption:
+          type: boolean
+        playbackServerKey:
+          type: string
+        playbackServerCert:
+          type: string
+        playbackAllowOrigin:
+          type: string
+        playbackTrustedProxies:
+          type: array
+          items:
+            type: string
 
         # RTSP server
         rtsp:
           type: boolean
-        protocols:
+        rtspTransports:
           type: array
           items:
             type: string
-        encryption:
+        rtspEncryption:
           type: string
         rtspAddress:
           type: string
@@ -93,9 +195,9 @@ components:
           type: integer
         multicastRTCPPort:
           type: integer
-        serverKey:
+        rtspServerKey:
           type: string
-        serverCert:
+        rtspServerCert:
           type: string
         rtspAuthMethods:
           type: array
@@ -127,6 +229,12 @@ components:
           type: string
         hlsServerCert:
           type: string
+        hlsAllowOrigin:
+          type: string
+        hlsTrustedProxies:
+          type: array
+          items:
+            type: string
         hlsAlwaysRemux:
           type: boolean
         hlsVariant:
@@ -139,13 +247,9 @@ components:
           type: string
         hlsSegmentMaxSize:
           type: string
-        hlsAllowOrigin:
-          type: string
-        hlsTrustedProxies:
-          type: array
-          items:
-            type: string
         hlsDirectory:
+          type: string
+        hlsMuxerCloseAfter:
           type: string
 
         # WebRTC server
@@ -192,6 +296,12 @@ components:
                 type: string
               clientOnly:
                 type: boolean
+        webrtcHandshakeTimeout:
+          type: string
+        webrtcTrackGatherTimeout:
+          type: string
+        webrtcSTUNGatherTimeout:
+          type: string
 
         # SRT server
         srt:
@@ -222,6 +332,8 @@ components:
           type: string
         fallback:
           type: string
+        useAbsoluteTimestamp:
+          type: boolean
 
         # Record
         record:
@@ -236,24 +348,6 @@ components:
           type: string
         recordDeleteAfter:
           type: string
-
-        # Authentication
-        publishUser:
-          type: string
-        publishPass:
-          type: string
-        publishIPs:
-          type: array
-          items:
-            type: string
-        readUser:
-          type: string
-        readPass:
-          type: string
-        readIPs:
-          type: array
-          items:
-            type: string
 
         # Publisher source
         overridePublisher:
@@ -278,6 +372,8 @@ components:
         # Raspberry Pi Camera source
         rpiCameraCamID:
           type: integer
+        rpiCameraSecondary:
+          type: boolean
         rpiCameraWidth:
           type: integer
         rpiCameraHeight:
@@ -324,14 +420,6 @@ components:
           type: string
         rpiCameraFPS:
           type: number
-        rpiCameraIDRPeriod:
-          type: integer
-        rpiCameraBitrate:
-          type: integer
-        rpiCameraProfile:
-          type: string
-        rpiCameraLevel:
-          type: string
         rpiCameraAfMode:
           type: string
         rpiCameraAfRange:
@@ -342,10 +430,24 @@ components:
           type: number
         rpiCameraAfWindow:
           type: string
+        rpiCameraFlickerPeriod:
+          type: integer
         rpiCameraTextOverlayEnable:
           type: boolean
         rpiCameraTextOverlay:
           type: string
+        rpiCameraCodec:
+          type: string
+        rpiCameraIDRPeriod:
+          type: integer
+        rpiCameraBitrate:
+          type: integer
+        rpiCameraProfile:
+          type: string
+        rpiCameraLevel:
+          type: string
+        rpiCameraJPEGQuality:
+          type: integer
 
         # Hooks
         runOnInit:
@@ -383,6 +485,8 @@ components:
       type: object
       properties:
         pageCount:
+          type: integer
+        itemCount:
           type: integer
         items:
           type: array
@@ -423,6 +527,8 @@ components:
       type: object
       properties:
         pageCount:
+          type: integer
+        itemCount:
           type: integer
         items:
           type: array
@@ -484,16 +590,12 @@ components:
       properties:
         pageCount:
           type: integer
+        itemCount:
+          type: integer
         items:
           type: array
           items:
             $ref: '#/components/schemas/HLSMuxer'
-
-    RecordingSegment:
-      type: object
-      properties:
-        start:
-          type: string
 
     Recording:
       type: object
@@ -510,10 +612,18 @@ components:
       properties:
         pageCount:
           type: integer
+        itemCount:
+          type: integer
         items:
           type: array
           items:
             $ref: '#/components/schemas/Recording'
+
+    RecordingSegment:
+      type: object
+      properties:
+        start:
+          type: string
 
     RTMPConn:
       type: object
@@ -543,6 +653,8 @@ components:
       properties:
         pageCount:
           type: integer
+        itemCount:
+          type: integer
         items:
           type: array
           items:
@@ -563,11 +675,16 @@ components:
         bytesSent:
           type: integer
           format: int64
+        session:
+          type: string
+          nullable: true
 
     RTSPConnList:
       type: object
       properties:
         pageCount:
+          type: integer
+        itemCount:
           type: integer
         items:
           type: array
@@ -599,11 +716,37 @@ components:
         bytesSent:
           type: integer
           format: int64
+        rtpPacketsReceived:
+          type: integer
+          format: int64
+        rtpPacketsSent:
+          type: integer
+          format: int64
+        rtpPacketsLost:
+          type: integer
+          format: int64
+        rtpPacketsInError:
+          type: integer
+          format: int64
+        rtpPacketsJitter:
+          type: number
+          format: float64
+        rtcpPacketsReceived:
+          type: integer
+          format: int64
+        rtcpPacketsSent:
+          type: integer
+          format: int64
+        rtcpPacketsInError:
+          type: integer
+          format: int64
 
     RTSPSessionList:
       type: object
       properties:
         pageCount:
+          type: integer
+        itemCount:
           type: integer
         items:
           type: array
@@ -634,6 +777,9 @@ components:
           type: integer
           format: int64
           description: The total number of received DATA packets, including retransmitted packets
+        packetsReceivedBelated:
+          type: integer
+          format: int64
         packetsSentUnique:
           type: integer
           format: int64
@@ -706,6 +852,9 @@ components:
           type: integer
           format: int64
           description: Same as packetsReceived, but expressed in bytes, including payload and all the headers (IP, TCP, SRT)
+        bytesReceivedBelated:
+          type: integer
+          format: int64
         bytesSentUnique:
           type: integer
           format: int64
@@ -831,11 +980,12 @@ components:
           format: float64
           description: Percentage of retransmitted data vs. received data
 
-
     SRTConnList:
       type: object
       properties:
         pageCount:
+          type: integer
+        itemCount:
           type: integer
         items:
           type: array
@@ -876,12 +1026,30 @@ components:
       properties:
         pageCount:
           type: integer
+        itemCount:
+          type: integer
         items:
           type: array
           items:
             $ref: '#/components/schemas/WebRTCSession'
 
 paths:
+
+  /v3/auth/jwks/refresh:
+    post:
+      operationId: authJwksRefresh
+      tags: [Authentication]
+      summary: Manually refreshes the JWT JWKS.
+      responses:
+        '200':
+          description: the request was successful.
+        '500':
+          description: server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /v3/config/global/get:
     get:
       operationId: configGlobalGet

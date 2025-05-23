@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
-	"github.com/bluenviron/gortsplib/v4/pkg/format"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
@@ -18,15 +17,13 @@ import (
 	"github.com/bluenviron/mediamtx/internal/protocols/rtmp"
 	"github.com/bluenviron/mediamtx/internal/protocols/tls"
 	"github.com/bluenviron/mediamtx/internal/stream"
-	"github.com/bluenviron/mediamtx/internal/unit"
 )
 
 // Source is a RTMP static source.
 type Source struct {
-	ResolvedSource string
-	ReadTimeout    conf.StringDuration
-	WriteTimeout   conf.StringDuration
-	Parent         defs.StaticSourceParent
+	ReadTimeout  conf.Duration
+	WriteTimeout conf.Duration
+	Parent       defs.StaticSourceParent
 }
 
 // Log implements logger.Writer.
@@ -38,7 +35,7 @@ func (s *Source) Log(level logger.Level, format string, args ...interface{}) {
 func (s *Source) Run(params defs.StaticSourceRunParams) error {
 	s.Log(logger.Debug, "connecting")
 
-	u, err := url.Parse(s.ResolvedSource)
+	u, err := url.Parse(params.ResolvedSource)
 	if err != nil {
 		return err
 	}
@@ -93,78 +90,34 @@ func (s *Source) Run(params defs.StaticSourceRunParams) error {
 func (s *Source) runReader(u *url.URL, nconn net.Conn) error {
 	nconn.SetReadDeadline(time.Now().Add(time.Duration(s.ReadTimeout)))
 	nconn.SetWriteDeadline(time.Now().Add(time.Duration(s.WriteTimeout)))
-	conn, err := rtmp.NewClientConn(nconn, u, false)
+	conn := &rtmp.Conn{
+		RW:      nconn,
+		Client:  true,
+		URL:     u,
+		Publish: false,
+	}
+	err := conn.Initialize()
 	if err != nil {
 		return err
 	}
 
-	mc, err := rtmp.NewReader(conn)
+	r := &rtmp.Reader{
+		Conn: conn,
+	}
+	err = r.Initialize()
 	if err != nil {
 		return err
 	}
 
-	videoFormat, audioFormat := mc.Tracks()
-
-	var medias []*description.Media
 	var stream *stream.Stream
 
-	if videoFormat != nil {
-		videoMedia := &description.Media{
-			Type:    description.MediaTypeVideo,
-			Formats: []format.Format{videoFormat},
-		}
-		medias = append(medias, videoMedia)
-
-		switch videoFormat.(type) {
-		case *format.H264:
-			mc.OnDataH264(func(pts time.Duration, au [][]byte) {
-				stream.WriteUnit(videoMedia, videoFormat, &unit.H264{
-					Base: unit.Base{
-						NTP: time.Now(),
-						PTS: pts,
-					},
-					AU: au,
-				})
-			})
-
-		default:
-			return fmt.Errorf("unsupported video codec: %T", videoFormat)
-		}
+	medias, err := rtmp.ToStream(r, &stream)
+	if err != nil {
+		return err
 	}
 
-	if audioFormat != nil { //nolint:dupl
-		audioMedia := &description.Media{
-			Type:    description.MediaTypeAudio,
-			Formats: []format.Format{audioFormat},
-		}
-		medias = append(medias, audioMedia)
-
-		switch audioFormat.(type) {
-		case *format.MPEG4Audio:
-			mc.OnDataMPEG4Audio(func(pts time.Duration, au []byte) {
-				stream.WriteUnit(audioMedia, audioFormat, &unit.MPEG4Audio{
-					Base: unit.Base{
-						NTP: time.Now(),
-						PTS: pts,
-					},
-					AUs: [][]byte{au},
-				})
-			})
-
-		case *format.MPEG1Audio:
-			mc.OnDataMPEG1Audio(func(pts time.Duration, frame []byte) {
-				stream.WriteUnit(audioMedia, audioFormat, &unit.MPEG1Audio{
-					Base: unit.Base{
-						NTP: time.Now(),
-						PTS: pts,
-					},
-					Frames: [][]byte{frame},
-				})
-			})
-
-		default:
-			return fmt.Errorf("unsupported audio codec: %T", audioFormat)
-		}
+	if len(medias) == 0 {
+		return fmt.Errorf("no supported tracks found")
 	}
 
 	res := s.Parent.SetReady(defs.PathSourceStaticSetReadyReq{
@@ -184,7 +137,7 @@ func (s *Source) runReader(u *url.URL, nconn net.Conn) error {
 
 	for {
 		nconn.SetReadDeadline(time.Now().Add(time.Duration(s.ReadTimeout)))
-		err := mc.Read()
+		err := r.Read()
 		if err != nil {
 			return err
 		}

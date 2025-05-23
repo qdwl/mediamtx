@@ -4,7 +4,6 @@ package test
 import (
 	"context"
 
-	"github.com/bluenviron/mediamtx/internal/asyncwriter"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
@@ -17,14 +16,18 @@ type SourceTester struct {
 	ctx       context.Context
 	ctxCancel func()
 	stream    *stream.Stream
-	writer    *asyncwriter.Writer
+	reader    stream.Reader
 
 	Unit chan unit.Unit
 	done chan struct{}
 }
 
 // NewSourceTester allocates a SourceTester.
-func NewSourceTester(createFunc func(defs.StaticSourceParent) defs.StaticSource, conf *conf.Path) *SourceTester {
+func NewSourceTester(
+	createFunc func(defs.StaticSourceParent) defs.StaticSource,
+	resolvedSource string,
+	conf *conf.Path,
+) *SourceTester {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
 	t := &SourceTester{
@@ -38,8 +41,9 @@ func NewSourceTester(createFunc func(defs.StaticSourceParent) defs.StaticSource,
 
 	go func() {
 		s.Run(defs.StaticSourceRunParams{ //nolint:errcheck
-			Context: ctx,
-			Conf:    conf,
+			Context:        ctx,
+			ResolvedSource: resolvedSource,
+			Conf:           conf,
 		})
 		close(t.done)
 	}()
@@ -50,8 +54,7 @@ func NewSourceTester(createFunc func(defs.StaticSourceParent) defs.StaticSource,
 // Close closes the tester.
 func (t *SourceTester) Close() {
 	t.ctxCancel()
-	t.writer.Stop()
-	t.stream.Close()
+	t.stream.RemoveReader(t.reader)
 	<-t.done
 }
 
@@ -61,21 +64,27 @@ func (t *SourceTester) Log(_ logger.Level, _ string, _ ...interface{}) {
 
 // SetReady implements StaticSourceParent.
 func (t *SourceTester) SetReady(req defs.PathSourceStaticSetReadyReq) defs.PathSourceStaticSetReadyRes {
-	t.stream, _ = stream.New(
-		1460,
-		req.Desc,
-		req.GenerateRTPPackets,
-		t,
-	)
+	t.stream = &stream.Stream{
+		WriteQueueSize:     512,
+		UDPMaxPayloadSize:  1472,
+		Desc:               req.Desc,
+		GenerateRTPPackets: req.GenerateRTPPackets,
+		Parent:             t,
+	}
+	err := t.stream.Initialize()
+	if err != nil {
+		panic(err)
+	}
 
-	t.writer = asyncwriter.New(2048, t)
+	t.reader = NilLogger
 
-	t.stream.AddReader(t.writer, req.Desc.Medias[0], req.Desc.Medias[0].Formats[0], func(u unit.Unit) error {
+	t.stream.AddReader(t.reader, req.Desc.Medias[0], req.Desc.Medias[0].Formats[0], func(u unit.Unit) error {
 		t.Unit <- u
 		close(t.Unit)
 		return nil
 	})
-	t.writer.Start()
+
+	t.stream.StartReader(t.reader)
 
 	return defs.PathSourceStaticSetReadyRes{
 		Stream: t.stream,
