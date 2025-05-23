@@ -11,6 +11,7 @@ require (
 	github.com/asticode/go-astits v1.13.0
 	github.com/bluenviron/gohlslib/v2 v2.1.4
 	github.com/bluenviron/gortsplib/v4 v4.14.0
+	github.com/bluenviron/mediacommon v1.14.0
 	github.com/bluenviron/mediacommon/v2 v2.1.1
 	github.com/datarhei/gosrt v0.9.0
 	github.com/fsnotify/fsnotify v1.9.0
@@ -31,8 +32,10 @@ require (
 	github.com/pion/rtp v1.8.15
 	github.com/pion/sdp/v3 v3.0.11
 	github.com/pion/webrtc/v4 v4.0.7
+	github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.38.0
+	golang.org/x/net v0.40.0
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -87,7 +90,6 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
 	golang.org/x/arch v0.16.0 // indirect
-	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect

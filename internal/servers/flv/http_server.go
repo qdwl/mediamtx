@@ -8,9 +8,9 @@ import (
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
+	"github.com/bluenviron/mediamtx/internal/protocols/flv"
 	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
 	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
-	"github.com/notedit/rtmp/format/flv/flvio"
 )
 
 type httpServer struct {
@@ -20,9 +20,9 @@ type httpServer struct {
 	serverCert     string
 	allowOrigin    string
 	trustedProxies conf.IPNetworks
-	readTimeout    conf.StringDuration
+	readTimeout    conf.Duration
 	parent         *Server
-	inner          *httpp.WrappedServer
+	inner          *httpp.Server
 }
 
 func (s *httpServer) initialize() error {
@@ -42,16 +42,17 @@ func (s *httpServer) initialize() error {
 		s.handleConn(w, r)
 	})
 
-	var err error
-	s.inner, err = httpp.NewWrappedServer(
-		network,
-		address,
-		time.Duration(s.readTimeout),
-		s.serverCert,
-		s.serverKey,
-		mux,
-		s,
-	)
+	s.inner = &httpp.Server{
+		Network:     network,
+		Address:     address,
+		ReadTimeout: time.Duration(s.readTimeout),
+		Encryption:  s.encryption,
+		ServerCert:  s.serverCert,
+		ServerKey:   s.serverKey,
+		Handler:     mux,
+		Parent:      s,
+	}
+	err := s.inner.Initialize()
 	if err != nil {
 		return err
 	}
@@ -89,42 +90,53 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buff := make([]byte, 256)
-	conn := newConn()
-
-	err := s.parent.newMuxer(newMuxerReq{
+	flvConn := flv.NewConn()
+	muxer, err := s.parent.newMuxer(newMuxerReq{
 		remoteAddr: r.RemoteAddr,
 		path:       path,
-		conn:       conn,
+		flvConn:    flvConn,
 	})
 	if err != nil {
 		http.Error(w, "invalid path", http.StatusNotFound)
-
 		return
 	}
+	defer muxer.Close()
 
 	for {
 		select {
-		case header := <-conn.flvHeader:
-			var flags uint8
-			if header.hasAudio {
-				flags |= flvio.FILE_HAS_AUDIO
-			}
-			if header.hasVideo {
-				flags |= flvio.FILE_HAS_VIDEO
-			}
-			flvio.FillFileHeader(buff, flags)
-			_, err := w.Write(buff[:flvio.FileHeaderLength])
-			if err != nil {
-				conn.close()
+		case header := <-flvConn.FlvHeader:
+			data := header.Marshal()
+			if _, err := w.Write(data); err != nil {
+				s.Log(logger.Error, "write flv header failed %v", err)
 				return
 			}
-		case tag := <-conn.flvTags:
-			err := flvio.WriteTag(w, tag, buff)
-			if err != nil {
-				conn.close()
+
+			data = flv.MarshalTagSize(0)
+			if _, err := w.Write(data); err != nil {
+				s.Log(logger.Error, "write flv tag size failed %v", err)
 				return
 			}
+
+		case tag := <-flvConn.FlvTags:
+			data := tag.Marshal()
+			if _, err := w.Write(data); err != nil {
+				s.Log(logger.Error, "write flv tag failed %v", err)
+				return
+			}
+
+			data = flv.MarshalTagSize(len(data))
+			if _, err := w.Write(data); err != nil {
+				s.Log(logger.Error, "write flv tag size failed %v", err)
+				return
+			}
+
+		case <-flvConn.Done:
+			s.Log(logger.Info, "flv conn closed")
+			return
+
+		case <-r.Context().Done():
+			s.Log(logger.Info, "http flv client disconnected")
+			return
 		}
 	}
 }

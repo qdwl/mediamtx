@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"sync/atomic"
 	"time"
 
-	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediacommon/pkg/codecs/h264"
+	"github.com/bluenviron/mediacommon/pkg/codecs/h265"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/mpegps"
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/transport"
 	"github.com/pion/rtp"
 	mpeg2 "github.com/qdwl/mpegps"
 )
+
+// OnFrameFunc is the prototype of the callback passed to OnFrameFunc().
+type OnFrameFunc func(pts time.Duration, data []byte)
 
 const (
 	UdpSocket int = 1
@@ -45,48 +50,51 @@ type Conn struct {
 	demuxer             *mpeg2.PSDemuxer
 	rtpPacketizer       *RtpPacketizer
 	tracks              map[uint8]*mpegps.Track
-	trackGatherComplete bool
+	trackGatherComplete atomic.Bool
 	trackProbe          chan trackProbeReq
+	OnFrameFuncMap      map[uint8]OnFrameFunc
 	pts                 uint64
 	dts                 uint64
 	buf                 []byte
-	file                *os.File
+	timebase            int64
+
+	IDRPresent bool
+	startRead  atomic.Bool
+
+	// out
+	frameCache []*PsFrame
 
 	// in
 	packetChan chan mpeg2.Display
-	frameChan  chan *PsFrame
 	done       chan struct{}
-
-	// out
-	demuxerChan chan *PsFrame
 }
 
 func NewConn(
-	parnteCtx context.Context,
+	parentCtx context.Context,
 	port int,
 	remoteIp string,
 	remotePort int,
 	protocol int,
 ) *Conn {
-	ctx, ctxCancel := context.WithCancel(parnteCtx)
+	ctx, ctxCancel := context.WithCancel(parentCtx)
 
 	c := &Conn{
-		port:                port,
-		protocol:            protocol,
-		ctx:                 ctx,
-		ctxCancel:           ctxCancel,
-		muxer:               mpeg2.NewPsMuxer(),
-		demuxer:             mpeg2.NewPSDemuxer(),
-		tracks:              make(map[uint8]*mpegps.Track),
-		trackGatherComplete: false,
-		trackProbe:          make(chan trackProbeReq),
-		pts:                 0,
-		dts:                 0,
-		buf:                 make([]byte, 1500),
-		packetChan:          make(chan mpeg2.Display),
-		frameChan:           make(chan *PsFrame),
-		demuxerChan:         make(chan *PsFrame, 30),
-		done:                make(chan struct{}),
+		port:           port,
+		protocol:       protocol,
+		ctx:            ctx,
+		ctxCancel:      ctxCancel,
+		muxer:          mpeg2.NewPsMuxer(),
+		demuxer:        mpeg2.NewPSDemuxer(),
+		tracks:         make(map[uint8]*mpegps.Track),
+		trackProbe:     make(chan trackProbeReq),
+		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
+		pts:            0,
+		dts:            0,
+		buf:            make([]byte, 1500),
+		timebase:       time.Now().UnixMilli(),
+		frameCache:     make([]*PsFrame, 0),
+		packetChan:     make(chan mpeg2.Display),
+		done:           make(chan struct{}),
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
@@ -107,6 +115,7 @@ func NewConn(
 
 	c.muxer.OnPacket = c.OnMuxPacket
 	c.demuxer.OnPacket = c.OnDemuxPacket
+	c.demuxer.OnFrame = c.OnFrame
 
 	go c.run()
 
@@ -114,7 +123,6 @@ func NewConn(
 }
 
 func (c *Conn) Close() {
-	c.file.Close()
 	c.ctxCancel()
 	<-c.done
 }
@@ -130,6 +138,17 @@ func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
 
 func (c *Conn) Port() int {
 	return c.port
+}
+
+// Tracks returns detected tracks.
+func (c *Conn) Tracks() []*mpegps.Track {
+	tracks := make([]*mpegps.Track, 0)
+	for _, track := range c.tracks {
+		if track.Complete {
+			tracks = append(tracks, track)
+		}
+	}
+	return tracks
 }
 
 func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
@@ -160,25 +179,12 @@ func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
 	}
 }
 
-func (c *Conn) ReadPsFrame() (frame *PsFrame, err error) {
-	select {
-	case frame = <-c.demuxerChan:
-		return frame, nil
-	case <-c.ctx.Done():
-		return nil, errors.New("GB28181 connection closed")
-	}
-}
-
 func (c *Conn) AddStream(cid mpeg2.PS_STREAM_TYPE) uint8 {
 	return c.muxer.AddStream(cid)
 }
 
 func (c *Conn) OnDemuxPacket(pkg mpeg2.Display, decodeResult error) {
-	select {
-	case c.packetChan <- pkg:
-	case <-c.ctx.Done():
-		return
-	}
+	c.ProcessPsPacket(pkg)
 }
 
 func (c *Conn) OnMuxPacket(pkg []byte, ts uint64) {
@@ -196,20 +202,40 @@ func (c *Conn) OnMuxPacket(pkg []byte, ts uint64) {
 	}
 }
 
+func (c *Conn) onFrameFunc(cid uint8, cb OnFrameFunc) {
+	c.OnFrameFuncMap[cid] = cb
+}
+
+func (c *Conn) StartRead() {
+	c.startRead.Store(true)
+}
+
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
-	f := &PsFrame{
-		Frame: make([]byte, 0),
-		CID:   cid,
-		PTS:   pts,
-		DTS:   dts,
-	}
+	// ts := time.Duration(pts)
+	ts := time.Duration(time.Now().UnixMilli() - c.timebase)
 
-	f.Frame = append(f.Frame, frame...)
+	if !c.startRead.Load() {
+		f := &PsFrame{
+			Frame: make([]byte, 0),
+			CID:   cid,
+			PTS:   uint64(ts),
+			DTS:   uint64(ts),
+		}
 
-	select {
-	case c.frameChan <- f:
-	case <-c.ctx.Done():
-		return
+		f.Frame = append(f.Frame, frame...)
+		c.frameCache = append(c.frameCache, f)
+	} else {
+		cb, ok := c.OnFrameFuncMap[uint8(cid)]
+		if ok {
+			if len(c.frameCache) > 0 {
+				for _, val := range c.frameCache {
+					cb(time.Duration(val.PTS), val.Frame)
+				}
+				c.frameCache = c.frameCache[:0]
+			}
+
+			cb(ts, frame)
+		}
 	}
 }
 
@@ -220,17 +246,13 @@ func (c *Conn) run() {
 	func() {
 		for {
 			select {
-			case pkt := <-c.packetChan:
-				c.ProcessPsPacket(pkt)
-
-			case frame := <-c.frameChan:
-				c.ProcessPsFrame(frame)
-
+			// case pkt := <-c.packetChan:
+			// 	c.ProcessPsPacket(pkt)
 			case req := <-c.trackProbe:
 				res := trackProbeRes{
 					tracks: make([]*mpegps.Track, 0),
 				}
-				if c.trackGatherComplete {
+				if c.trackGatherComplete.Load() {
 					for _, track := range c.tracks {
 						if track.Complete {
 							res.tracks = append(res.tracks, track)
@@ -257,7 +279,7 @@ func (c *Conn) ProcessRtpPacket(pkt *rtp.Packet) {
 }
 
 func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
-	if c.trackGatherComplete {
+	if c.trackGatherComplete.Load() {
 		return
 	}
 
@@ -283,10 +305,10 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamId:   es.Elementary_stream_id,
 						StreamType: uint8(mpeg2.PS_STREAM_H265),
 						Codec:      &mpegps.CodecH265{},
-						Complete:   true,
+						Complete:   false,
 						Updated:    time.Now(),
 					}
-					c.tracks[uint8(mpeg2.PS_STREAM_H264)] = track
+					c.tracks[uint8(mpeg2.PS_STREAM_H265)] = track
 				}
 
 			case uint8(mpeg2.PS_STREAM_AAC):
@@ -351,6 +373,58 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						track.Complete = true
 					}
 				}
+				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_H265 {
+					if track, ok := c.tracks[uint8(mpeg2.PS_STREAM_H265)]; ok {
+						var dec h264.AnnexB
+						err := dec.Unmarshal(value.Pes_payload)
+						if err != nil {
+							return
+						}
+
+						codec := track.Codec.(*mpegps.CodecH265)
+
+						for _, nalu := range dec {
+							typ := h265.NALUType((nalu[0] >> 1) & 0b111111)
+							switch typ {
+							case h265.NALUType_VPS_NUT:
+								codec.VPS = append(codec.VPS, nalu...)
+							case h265.NALUType_SPS_NUT:
+								codec.SPS = append(codec.SPS, nalu...)
+							case h265.NALUType_PPS_NUT:
+								codec.PPS = append(codec.PPS, nalu...)
+							}
+						}
+
+						if len(codec.VPS) > 0 && len(codec.PPS) > 0 && len(codec.SPS) > 0 {
+							track.Complete = true
+						}
+					}
+				}
+				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_H264 {
+					if track, ok := c.tracks[uint8(mpeg2.PS_STREAM_H264)]; ok {
+						var dec h264.AnnexB
+						err := dec.Unmarshal(value.Pes_payload)
+						if err != nil {
+							return
+						}
+
+						codec := track.Codec.(*mpegps.CodecH264)
+
+						for _, nalu := range dec {
+							typ := h264.NALUType(nalu[0] & 0x1F)
+							switch typ {
+							case h264.NALUTypeSPS:
+								codec.SPS = append(codec.SPS, nalu...)
+							case h264.NALUTypePPS:
+								codec.PPS = append(codec.PPS, nalu...)
+							}
+						}
+
+						if len(codec.SPS) > 0 && len(codec.PPS) > 0 {
+							track.Complete = true
+						}
+					}
+				}
 				track.Updated = time.Now()
 			}
 
@@ -359,20 +433,8 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 			}
 		}
 		if count == len(c.tracks) && count > 0 {
-			c.trackGatherComplete = true
+			c.trackGatherComplete.Store(true)
 		}
-	}
-
-	if c.trackGatherComplete {
-		c.demuxer.OnFrame = c.OnFrame
-	}
-}
-
-func (c *Conn) ProcessPsFrame(frame *PsFrame) {
-	select {
-	case c.demuxerChan <- frame:
-	case <-c.ctx.Done():
-		return
 	}
 }
 

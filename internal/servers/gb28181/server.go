@@ -101,7 +101,7 @@ type Server struct {
 	ServerCert     string
 	AllowOrigin    string
 	TrustedProxies conf.IPNetworks
-	ReadTimeout    conf.StringDuration
+	ReadTimeout    conf.Duration
 	WriteQueueSize int
 	MinRTPPort     int
 	MaxRTPPort     int
@@ -154,7 +154,6 @@ func (s *Server) Initialize() error {
 		allowOrigin:    s.AllowOrigin,
 		trustedProxies: s.TrustedProxies,
 		readTimeout:    s.ReadTimeout,
-		pathManager:    s.PathManager,
 		parent:         s,
 	}
 	err := s.httpServer.initialize()
@@ -252,6 +251,7 @@ outer:
 	}
 
 	s.ctxCancel()
+	s.Log(logger.Info, "wait close")
 
 	wg.Wait()
 

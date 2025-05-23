@@ -8,14 +8,20 @@ import (
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
+	"github.com/bluenviron/mediamtx/internal/protocols/flv"
 	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
 type newMuxerReq struct {
 	remoteAddr string
 	path       string
-	conn       *conn
-	res        chan error
+	flvConn    *flv.Conn
+	res        chan newMuxerRes
+}
+
+type newMuxerRes struct {
+	err   error
+	muxer *muxer
 }
 
 type serverPathManager interface {
@@ -36,7 +42,7 @@ type Server struct {
 	ServerCert       string
 	AllowOrigin      string
 	TrustedProxies   conf.IPNetworks
-	ReadTimeout      conf.StringDuration
+	ReadTimeout      conf.Duration
 	WriteQueueSize   int
 	PathManager      serverPathManager
 	Parent           serverParent
@@ -122,8 +128,11 @@ outer:
 	for {
 		select {
 		case req := <-s.chNewMuxer:
-			r := s.createMuxer(req.path, req.remoteAddr, req.conn)
-			req.res <- r
+			m, err := s.createMuxer(req.path, req.remoteAddr, req.flvConn)
+			req.res <- newMuxerRes{
+				muxer: m,
+				err:   err,
+			}
 		case c := <-s.chCloseMuxer:
 			if _, ok := s.muxers[c]; !ok {
 				continue
@@ -139,20 +148,19 @@ outer:
 	s.websocketServer.close()
 }
 
-func (s *Server) createMuxer(path string, remoteAddr string, conn *conn) error {
+func (s *Server) createMuxer(path string, remoteAddr string, conn *flv.Conn) (*muxer, error) {
 	r := &muxer{
-		parentCtx:      s.ctx,
-		remoteAddr:     remoteAddr,
-		writeQueueSize: s.WriteQueueSize,
-		wg:             &s.wg,
-		pathName:       path,
-		pathManager:    s.PathManager,
-		parent:         s,
-		conn:           conn,
+		parentCtx:   s.ctx,
+		remoteAddr:  remoteAddr,
+		wg:          &s.wg,
+		pathName:    path,
+		pathManager: s.PathManager,
+		parent:      s,
+		flvConn:     conn,
 	}
 	r.initialize()
 	s.muxers[r] = struct{}{}
-	return nil
+	return r, nil
 }
 
 // closeMuxer is called by muxer.
@@ -163,13 +171,14 @@ func (s *Server) closeMuxer(c *muxer) {
 	}
 }
 
-func (s *Server) newMuxer(req newMuxerReq) error {
-	req.res = make(chan error)
+func (s *Server) newMuxer(req newMuxerReq) (*muxer, error) {
+	req.res = make(chan newMuxerRes)
 
 	select {
 	case s.chNewMuxer <- req:
-		return <-req.res
+		res := <-req.res
+		return res.muxer, res.err
 	case <-s.ctx.Done():
-		return fmt.Errorf("terminated")
+		return nil, fmt.Errorf("terminated")
 	}
 }

@@ -1,6 +1,6 @@
 package mpegps
 
-import "github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
+import "github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 
 // Codec is a MPEG-TS codec.
 type Codec interface {
@@ -8,13 +8,20 @@ type Codec interface {
 }
 
 // CodecH264 is a H264 codec.
-type CodecH264 struct{}
+type CodecH264 struct {
+	SPS []uint8
+	PPS []uint8
+}
 
 func (*CodecH264) isCodec() {
 }
 
 // CodecH265 is a H265 codec.
-type CodecH265 struct{}
+type CodecH265 struct {
+	VPS []uint8
+	SPS []uint8
+	PPS []uint8
+}
 
 func (*CodecH265) isCodec() {
 }

@@ -2,13 +2,12 @@ package rtmp
 
 import (
 	"errors"
-	"log"
 	"time"
 
 	"github.com/abema/go-mp4"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
-	"github.com/bluenviron/mediacommon/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg1audio"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
 
@@ -194,7 +193,6 @@ func (w *Writer) writeTracks() error {
 				},
 			}
 
-			log.Printf("send VideoExSequenceStart")
 			err = w.Conn.Write(&message.VideoExSequenceStart{
 				ChunkStreamID:   message.VideoChunkStreamID,
 				MessageStreamID: 0x1000000,

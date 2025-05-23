@@ -1,9 +1,8 @@
-package gb28181
+package pusher
 
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
@@ -25,6 +24,11 @@ type httpServer struct {
 	inner          *httpp.Server
 }
 
+// Log implements logger.Writer.
+func (s *httpServer) Log(level logger.Level, format string, args ...interface{}) {
+	s.parent.Log(level, format, args...)
+}
+
 func (s *httpServer) initialize() error {
 	if s.encryption {
 		if s.serverCert == "" {
@@ -37,9 +41,8 @@ func (s *httpServer) initialize() error {
 
 	router := gin.New()
 	router.SetTrustedProxies(s.trustedProxies.ToTrustedProxies()) //nolint:errcheck
-	router.POST("/gb28181/:path", s.onCreateStream)
-	router.PUT("/gb28181/:path", s.onUpdateStream)
-	router.DELETE("/gb28181/:path", s.onDeleteStream)
+	router.POST("/push", s.onCreatePush)
+	router.DELETE("/push", s.onDeletePush)
 	network, address := restrictnetwork.Restrict("tcp", s.address)
 
 	s.inner = &httpp.Server{
@@ -60,61 +63,21 @@ func (s *httpServer) initialize() error {
 	return nil
 }
 
-func (s *httpServer) Log(level logger.Level, format string, args ...interface{}) {
-	s.parent.Log(level, format, args...)
-}
-
 func (s *httpServer) close() {
 	s.inner.Close()
 }
 
-func (s *httpServer) onCreateStream(ctx *gin.Context) {
-	pathName := ctx.Param("path")
-	req := GB28181CreateReq{}
+func (s *httpServer) onCreatePush(ctx *gin.Context) {
+	req := CreatePushReq{}
 
 	if err := ctx.ShouldBind(&req); err != nil {
 		ctx.Writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	res := s.parent.newSession(gb28181NewSessionReq{
-		pathName:   pathName,
-		ssrc:       req.SSRC,
-		remoteIp:   req.RemoteIP,
-		remotePort: req.RemotePort,
-		direction:  strings.ToLower(req.Direction),
-		transport:  req.Transport,
-	})
-	if res.err != nil {
-		if res.errStatusCode != 0 {
-			ctx.Writer.WriteHeader(res.errStatusCode)
-		}
-		return
-	}
-
-	res1 := GB28181CreateRes{
-		SessionID: res.sx.uuid.String(),
-		LocalPort: res.sx.conn.Port(),
-	}
-
-	ctx.JSON(http.StatusOK, &res1)
-}
-
-func (s *httpServer) onUpdateStream(ctx *gin.Context) {
-	pathName := ctx.Param("path")
-	req := GB28181UpdateReq{}
-
-	if err := ctx.ShouldBind(&req); err != nil {
-		ctx.Writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	res := s.parent.updateSession(gb28181UpdateSessionReq{
-		pathName:   pathName,
-		ssrc:       req.SSRC,
-		sessionId:  req.SessionID,
-		remoteIp:   req.RemoteIP,
-		remotePort: req.RemotePort,
+	res := s.parent.newPush(newPushReq{
+		pathName: req.PathName,
+		pushAddr: req.PushAddr,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
@@ -126,18 +89,17 @@ func (s *httpServer) onUpdateStream(ctx *gin.Context) {
 	ctx.Writer.WriteHeader(http.StatusOK)
 }
 
-func (s *httpServer) onDeleteStream(ctx *gin.Context) {
-	pathName := ctx.Param("path")
+func (s *httpServer) onDeletePush(ctx *gin.Context) {
+	req := DeletePushReq{}
 
-	req := GB28181DeleteReq{}
 	if err := ctx.ShouldBind(&req); err != nil {
 		ctx.Writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	res := s.parent.deleteSession(gb28181DeleteSessionReq{
-		pathName:  pathName,
-		sessionId: req.SessionID,
+	res := s.parent.deletePush(deletePushReq{
+		pathName: req.PathName,
+		pushAddr: req.PushAddr,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
@@ -145,5 +107,6 @@ func (s *httpServer) onDeleteStream(ctx *gin.Context) {
 		}
 		return
 	}
+
 	ctx.Writer.WriteHeader(http.StatusOK)
 }

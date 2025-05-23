@@ -315,6 +315,15 @@ type Conf struct {
 	GB28181AllowOrigin    string     `json:"gb28181AllowOrigin"`
 	GB28181TrustedProxies IPNetworks `json:"gb28181TrustedProxies"`
 
+	// Push server
+	Push               bool       `json:"push"`
+	PushAddress        string     `json:"pushAddress"`
+	PushEncryption     bool       `json:"pushEncryption"`
+	PushServerKey      string     `json:"pushServerKey"`
+	PushServerCert     string     `json:"pushServerCert"`
+	PushAllowOrigin    string     `json:"pushAllowOrigin"`
+	PushTrustedProxies IPNetworks `json:"pushTrustedProxies"`
+
 	// Record (deprecated)
 	Record                *bool         `json:"record,omitempty"`                // deprecated
 	RecordPath            *string       `json:"recordPath,omitempty"`            // deprecated
@@ -450,6 +459,11 @@ func (conf *Conf) setDefaults() {
 	conf.GB28181 = true
 	conf.GB28181Address = ":8893"
 	conf.GB28181AllowOrigin = "*"
+
+	// Push server
+	conf.Push = true
+	conf.PushAddress = ":8899"
+	conf.PushAllowOrigin = "*"
 
 	conf.PathDefaults.setDefaults()
 }

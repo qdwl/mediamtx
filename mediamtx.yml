@@ -250,9 +250,9 @@ rtspAddress: :8554
 # Address of the TCP/TLS/RTSPS listener. This is needed only when encryption is "strict" or "optional".
 rtspsAddress: :8322
 # Address of the UDP/RTP listener. This is needed only when "udp" is in rtspTransports.
-rtpAddress: :8000
+rtpAddress: :28000
 # Address of the UDP/RTCP listener. This is needed only when "udp" is in rtspTransports.
-rtcpAddress: :8001
+rtcpAddress: :28001
 # IP range of all UDP-multicast listeners. This is needed only when "multicast" is in rtspTransports.
 multicastIPRange: 224.1.0.0/16
 # Port of all UDP-multicast/RTP listeners. This is needed only when "multicast" is in rtspTransports.
@@ -466,6 +466,30 @@ gb28181AllowOrigin: "*"
 # If the server receives a request from one of these entries, IP in logs
 # will be taken from the X-Forwarded-For header.
 gb28181TrustedProxies: []
+
+###############################################
+# Global settings -> Push parameters
+
+# Enables support for the Push protocol.
+push: yes
+# Address of the Push listener.
+pushAddress: :8899
+# Enable TLS/HTTPS on the Push server.
+pushEncryption: no
+# Path to the server key.
+# This can be generated with:
+# openssl genrsa -out server.key 2048
+# openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+pushServerKey: server.key
+# Path to the server certificate.
+pushServerCert: server.crt
+# Value of the Access-Control-Allow-Origin header provided in every HTTP response.
+# This allows to play the Push stream from an external website.
+pushAllowOrigin: "*"
+# List of IPs or CIDRs of proxies placed before the Push server.
+# If the server receives a request from one of these entries, IP in logs
+# will be taken from the X-Forwarded-For header.
+pushTrustedProxies: []
 
 ###############################################
 # Default path settings
@@ -782,9 +806,9 @@ paths:
   # do not match another entry.
   all_others:
 
-  "livestream":
-    # If path name is a regular expression, $G1, G2, etc will be replaced
-    # with regular expression groups.
-    # rtmp://10.129.127.188:26035/video/http-623261-1709202561-9
-    source: rtsp://admin:hk123456@10.129.126.210/Streaming/Channels/1
-    sourceOnDemand: yes
+  #hik-ipc:
+  #  runOnDemand: ffmpeg -re -stream_loop -1 -rtsp_transport tcp -i rtsp://admin:hk123456@10.129.126.210:554/Streaming/Channels/1 -c copy -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+  #  runOnDemandRestart: yes
+
+  #mypath:
+  # source: rtmp://localhost:1935/hik-ipc

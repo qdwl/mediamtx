@@ -25,6 +25,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/metrics"
 	"github.com/bluenviron/mediamtx/internal/playback"
 	"github.com/bluenviron/mediamtx/internal/pprof"
+	"github.com/bluenviron/mediamtx/internal/pusher"
 	"github.com/bluenviron/mediamtx/internal/recordcleaner"
 	"github.com/bluenviron/mediamtx/internal/rlimit"
 	"github.com/bluenviron/mediamtx/internal/servers/flv"
@@ -86,6 +87,7 @@ type Core struct {
 	srtServer       *srt.Server
 	flvServer       *flv.Server
 	gb28181Server   *gb28181.Server
+	pushServer      *pusher.Server
 	api             *api.API
 	confWatcher     *confwatcher.ConfWatcher
 
@@ -632,6 +634,27 @@ func (p *Core) createResources(initial bool) error {
 		p.gb28181Server = i
 	}
 
+	if p.conf.Push &&
+		p.pushServer == nil {
+		i := &pusher.Server{
+			Address:        p.conf.PushAddress,
+			Encryption:     p.conf.PushEncryption,
+			ServerKey:      p.conf.PushServerKey,
+			ServerCert:     p.conf.PushServerCert,
+			AllowOrigin:    p.conf.PushAllowOrigin,
+			TrustedProxies: p.conf.PushTrustedProxies,
+			ReadTimeout:    p.conf.ReadTimeout,
+			WriteTimeout:   p.conf.WriteTimeout,
+			PathManager:    p.pathManager,
+			Parent:         p,
+		}
+		err := i.Initialize()
+		if err != nil {
+			return err
+		}
+		p.pushServer = i
+	}
+
 	if p.conf.API &&
 		p.api == nil {
 		i := &api.API{
@@ -909,6 +932,19 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		closePathManager ||
 		closeLogger
 
+	closePushServer := newConf == nil ||
+		newConf.Push != p.conf.Push ||
+		newConf.PushAddress != p.conf.PushAddress ||
+		newConf.PushAllowOrigin != p.conf.PushAllowOrigin ||
+		newConf.PushEncryption != p.conf.PushEncryption ||
+		newConf.PushServerKey != p.conf.PushServerKey ||
+		newConf.PushServerCert != p.conf.PushServerCert ||
+		newConf.ReadTimeout != p.conf.ReadTimeout ||
+		newConf.WriteTimeout != p.conf.WriteTimeout ||
+		!reflect.DeepEqual(newConf.PushTrustedProxies, p.conf.PushTrustedProxies) ||
+		closePathManager ||
+		closeLogger
+
 	closeAPI := newConf == nil ||
 		newConf.API != p.conf.API ||
 		newConf.APIAddress != p.conf.APIAddress ||
@@ -942,9 +978,9 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		}
 	}
 
-	if closeSRTServer && p.srtServer != nil {
-		p.srtServer.Close()
-		p.srtServer = nil
+	if closePushServer && p.pushServer != nil {
+		p.pushServer.Close()
+		p.pushServer = nil
 	}
 
 	if closeGB28181Server && p.gb28181Server != nil {
@@ -955,6 +991,11 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 	if closeFLVServer && p.flvServer != nil {
 		p.flvServer.Close()
 		p.flvServer = nil
+	}
+
+	if closeSRTServer && p.srtServer != nil {
+		p.srtServer.Close()
+		p.srtServer = nil
 	}
 
 	if closeWebRTCServer && p.webRTCServer != nil {

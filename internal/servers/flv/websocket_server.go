@@ -1,15 +1,18 @@
 package flv
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
-	"github.com/notedit/rtmp/format/flv/flvio"
+	"github.com/bluenviron/mediamtx/internal/protocols/flv"
+
 	"golang.org/x/net/websocket"
 )
 
@@ -20,7 +23,7 @@ type websocketServer struct {
 	serverCert     string
 	allowOrigin    string
 	trustedProxies conf.IPNetworks
-	readTimeout    conf.StringDuration
+	readTimeout    conf.Duration
 	parent         *Server
 	listener       net.Listener
 }
@@ -84,58 +87,73 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 		return
 	}
 
-	buff := make([]byte, 256)
-	conn := newConn()
-	defer conn.close()
-
-	err := s.parent.newMuxer(newMuxerReq{
+	flvConn := flv.NewConn()
+	muxer, err := s.parent.newMuxer(newMuxerReq{
 		remoteAddr: r.RemoteAddr,
 		path:       path,
-		conn:       conn,
+		flvConn:    flvConn,
 	})
 	if err != nil {
 		return
 	}
+	defer muxer.Close()
+
+	ctx := r.Context()
+
+	s.Log(logger.Info, "websocket-flv pull")
+
+	c.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.SetWriteDeadline(time.Now().Add(60 * time.Second))
+
+	readerErr := make(chan error)
+	go func() {
+		for {
+			var msg string
+			err := websocket.Message.Receive(c, &msg)
+			if err != nil {
+				readerErr <- errors.New("terminated")
+				s.Log(logger.Info, "websocket connection read error %v", err)
+				return
+			}
+		}
+	}()
 
 	for {
 		select {
-		case header := <-conn.flvHeader:
-			var flags uint8
-			if header.hasAudio {
-				flags |= flvio.FILE_HAS_AUDIO
-			}
-			if header.hasVideo {
-				flags |= flvio.FILE_HAS_VIDEO
-			}
-			flvio.FillFileHeader(buff, flags)
-			err := websocket.Message.Send(c, buff[:flvio.FileHeaderLength])
-			if err != nil {
-				return
-			}
-		case tag := <-conn.flvTags:
-			data := tag.Data
-
-			n := tag.FillHeader(buff[flvio.TagHeaderLength:])
-			datalen := len(data) + n
-
-			flvio.FillTagHeader(buff, tag, datalen)
-			n += flvio.TagHeaderLength
-
-			err := websocket.Message.Send(c, buff[:n])
-			if err != nil {
+		case header := <-flvConn.FlvHeader:
+			data := header.Marshal()
+			if err := websocket.Message.Send(c, data); err != nil {
+				s.Log(logger.Error, "websocket conn send failed %v", err)
 				return
 			}
 
-			err = websocket.Message.Send(c, data)
-			if err != nil {
+			data = flv.MarshalTagSize(0)
+			if err := websocket.Message.Send(c, data); err != nil {
+				s.Log(logger.Error, "websocket conn send failed %v", err)
+				return
+			}
+		case tag := <-flvConn.FlvTags:
+			data := tag.Marshal()
+			if err := websocket.Message.Send(c, data); err != nil {
+				s.Log(logger.Error, "websocket conn send failed %v", err)
 				return
 			}
 
-			flvio.FillTagTrailer(buff, datalen)
-			err = websocket.Message.Send(c, buff[:flvio.TagTrailerLength])
-			if err != nil {
+			data = flv.MarshalTagSize(len(data))
+			if err := websocket.Message.Send(c, data); err != nil {
+				s.Log(logger.Error, "websocket conn send failed %v", err)
 				return
 			}
+		case <-flvConn.Done:
+			s.Log(logger.Info, "flv conn closed")
+			return
+
+		case <-ctx.Done():
+			return
+
+		case err := <-readerErr:
+			s.Log(logger.Info, "websocket conn error %v", err)
+			return
 		}
 	}
 }
