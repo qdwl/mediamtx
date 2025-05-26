@@ -157,7 +157,7 @@ outer:
 				pusher: pusher,
 			}
 		case req := <-s.chDeletePush:
-			hash := md5.Sum([]byte(req.pathName + req.pushAddr))
+			hash := md5.Sum([]byte(req.pushAddr + req.pathName))
 			id := hex.EncodeToString(hash[:])
 			pusher, ok := s.pushers[id]
 			if !ok {
@@ -192,18 +192,8 @@ func (s *Server) newPush(req newPushReq) newPushRes {
 
 	select {
 	case s.chNewPush <- req:
-		res1 := <-req.res
-
-		select {
-		case res2 := <-req.res:
-			return res2
-
-		case <-res1.pusher.ctx.Done():
-			return newPushRes{
-				err:           fmt.Errorf("terminated"),
-				errStatusCode: http.StatusInternalServerError,
-			}
-		}
+		res := <-req.res
+		return res
 
 	case <-s.ctx.Done():
 		return newPushRes{

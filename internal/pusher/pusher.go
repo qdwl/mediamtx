@@ -15,6 +15,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/rtmp"
+	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
 type pusher struct {
@@ -50,7 +51,7 @@ func (p *pusher) Close() {
 }
 
 func (p *pusher) ID() string {
-	hash := md5.Sum([]byte(p.pathName + p.pushAddr))
+	hash := md5.Sum([]byte(p.pushAddr + p.pathName))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -68,7 +69,7 @@ func (p *pusher) run() {
 func (p *pusher) runInner() error {
 	p.Log(logger.Debug, "connecting")
 
-	u, err := url.Parse(p.pushAddr)
+	u, err := url.Parse(fmt.Sprintf("%s/%s", p.pushAddr, p.pathName))
 	if err != nil {
 		return err
 	}
@@ -107,6 +108,7 @@ func (p *pusher) runInner() error {
 		case <-p.ctx.Done():
 			nconn.Close()
 			<-wirteErr
+			p.Log(logger.Info, "push exit")
 			return errors.New("terminated")
 		}
 	}
@@ -116,16 +118,37 @@ func (p *pusher) runWriter(u *url.URL, nconn net.Conn) error {
 	nconn.SetReadDeadline(time.Now().Add(time.Duration(p.readTimeout)))
 	nconn.SetWriteDeadline(time.Now().Add(time.Duration(p.writeTimeout)))
 	conn := &rtmp.Conn{
-		RW: nconn,
+		RW:      nconn,
+		Client:  true,
+		URL:     u,
+		Publish: true,
+	}
+	err := conn.Initialize()
+	if err != nil {
+		return err
 	}
 
-	path, stream, err := p.pathManager.AddReader(defs.PathAddReaderReq{
-		Author: p,
-		AccessRequest: defs.PathAccessRequest{
-			Name:     p.pathName,
-			SkipAuth: true,
-		},
-	})
+	var path defs.Path
+	var stream *stream.Stream
+	var count int64 = 0
+	for {
+		<-time.After(100 * time.Millisecond)
+		path, stream, err = p.pathManager.AddReader(defs.PathAddReaderReq{
+			Author: p,
+			AccessRequest: defs.PathAccessRequest{
+				Name:     p.pathName,
+				SkipAuth: true,
+			},
+		})
+		count++
+		if err == nil || count > 100 {
+			break
+		} else {
+			p.Log(logger.Debug, "find stream failed, %v", err)
+			continue
+		}
+	}
+
 	if err != nil {
 		return err
 	}
