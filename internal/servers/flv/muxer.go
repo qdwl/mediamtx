@@ -94,7 +94,7 @@ func (m *muxer) runInner() error {
 		}
 	}
 	if err != nil {
-		return nil
+		return err
 	}
 
 	m.path = path

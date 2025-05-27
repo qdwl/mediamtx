@@ -35,9 +35,8 @@ type session struct {
 	uuid       uuid.UUID
 	answerSent bool
 	conn       *gb28181.Conn
-	vcid       uint8
-	acid       uint8
 	timebase   int64
+	path       defs.Path
 }
 
 func (s *session) initialize() {
@@ -160,7 +159,52 @@ func (s *session) runPublish() (int, error) {
 }
 
 func (s *session) runRead() (int, error) {
-	return 0, nil
+	var path defs.Path
+	var stream *stream.Stream
+	var err error
+	var count int = 0
+	for {
+		<-time.After(100 * time.Millisecond)
+		path, stream, err = s.pathManager.AddReader(defs.PathAddReaderReq{
+			Author: s,
+			AccessRequest: defs.PathAccessRequest{
+				Name:     s.req.pathName,
+				SkipAuth: true,
+			},
+		})
+		count++
+		if err == nil || count > 30 {
+			break
+		} else {
+			s.Log(logger.Error, "find stream failed, %v", err)
+			continue
+		}
+	}
+	if err != nil {
+		return 0, err
+	}
+	s.path = path
+
+	defer s.path.RemoveReader(defs.PathRemoveReaderReq{Author: s})
+
+	err = gb28181.FromStream(stream, s, s.conn)
+	if err != nil {
+		return 0, err
+	}
+
+	s.Log(logger.Info, "is reading from path '%s', %s",
+		path.Name(), defs.FormatsInfo(stream.ReaderFormats(s)))
+
+	stream.StartReader(s)
+	defer stream.RemoveReader(s)
+
+	select {
+	case <-s.ctx.Done():
+		return 0, fmt.Errorf("terminated")
+
+	case err := <-stream.ReaderError(s):
+		return 0, err
+	}
 }
 
 func (s *session) writeAnswer() error {

@@ -58,6 +58,9 @@ type Conn struct {
 	buf                 []byte
 	timebase            int64
 
+	vcid uint8
+	acid uint8
+
 	IDRPresent bool
 	startRead  atomic.Bool
 
@@ -179,8 +182,12 @@ func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
 	}
 }
 
-func (c *Conn) AddStream(cid mpeg2.PS_STREAM_TYPE) uint8 {
-	return c.muxer.AddStream(cid)
+func (c *Conn) AddVideoStream(cid mpeg2.PS_STREAM_TYPE) {
+	c.vcid = c.muxer.AddStream(cid)
+}
+
+func (c *Conn) AddAudioStream(cid mpeg2.PS_STREAM_TYPE) {
+	c.acid = c.muxer.AddStream(cid)
 }
 
 func (c *Conn) OnDemuxPacket(pkg mpeg2.Display, decodeResult error) {
@@ -438,12 +445,21 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 	}
 }
 
-func (c *Conn) Write(sid uint8, frame []byte, pts uint64, dts uint64) {
+func (c *Conn) WriteVideo(frame []byte, pts uint64, dts uint64) {
 	c.pts = pts
 	c.dts = dts
 
-	if err := c.muxer.Write(sid, frame, pts, dts); err != nil {
-		fmt.Printf("write frame error %v\n", err)
+	if err := c.muxer.Write(c.vcid, frame, pts, dts); err != nil {
+		fmt.Printf("write video frame error %v\n", err)
+	}
+}
+
+func (c *Conn) WriteAudio(frame []byte, pts uint64, dts uint64) {
+	c.pts = pts
+	c.dts = dts
+
+	if err := c.muxer.Write(c.acid, frame, pts, dts); err != nil {
+		fmt.Printf("write audio frame error %v\n", err)
 	}
 }
 
