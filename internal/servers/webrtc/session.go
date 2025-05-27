@@ -262,10 +262,26 @@ func (s *session) runRead() (int, error) {
 		IP:          net.ParseIP(ip),
 	}
 
-	path, stream, err := s.pathManager.AddReader(defs.PathAddReaderReq{
-		Author:        s,
-		AccessRequest: req,
-	})
+	var path defs.Path
+	var stream *stream.Stream
+	var err error
+	var count int = 0
+
+	for {
+		<-time.After(100 * time.Millisecond)
+		path, stream, err = s.pathManager.AddReader(defs.PathAddReaderReq{
+			Author:        s,
+			AccessRequest: req,
+		})
+		count++
+		if err == nil || count > 30 {
+			break
+		} else {
+			s.Log(logger.Error, "find stream failed, %v", err)
+			continue
+		}
+	}
+
 	if err != nil {
 		var terr2 defs.PathNoStreamAvailableError
 		if errors.As(err, &terr2) {
