@@ -2,7 +2,6 @@ package gb28181
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
@@ -42,11 +41,6 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				err := dec.Unmarshal(data)
 				if err != nil {
 					return
-				}
-
-				for _, nalu := range dec {
-					typ := h264.NALUType(nalu[0] & 0x1F)
-					fmt.Printf("nalu type %d pts:%d\n", typ, int64(pts))
 				}
 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H264{
