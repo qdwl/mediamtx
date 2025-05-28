@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
@@ -98,12 +97,10 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 	}
 	defer muxer.Close()
 
-	ctx := r.Context()
-
 	s.Log(logger.Info, "websocket-flv pull")
 
-	c.SetReadDeadline(time.Now().Add(60 * time.Second))
-	c.SetWriteDeadline(time.Now().Add(60 * time.Second))
+	// c.SetReadDeadline(time.Now().Add(60 * time.Second))
+	// c.SetWriteDeadline(time.Now().Add(60 * time.Second))
 
 	readerErr := make(chan error)
 	go func() {
@@ -148,7 +145,8 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 			s.Log(logger.Info, "flv conn closed")
 			return
 
-		case <-ctx.Done():
+		case <-r.Context().Done():
+			s.Log(logger.Info, "websocket conn done")
 			return
 
 		case err := <-readerErr:

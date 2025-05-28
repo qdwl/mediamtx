@@ -43,6 +43,7 @@ func (m *muxer) initialize() {
 }
 
 func (m *muxer) Close() {
+	m.Log(logger.Error, "close muxer")
 	m.ctxCancel()
 }
 
@@ -63,6 +64,8 @@ func (m *muxer) run() {
 	if err != nil {
 		m.flvConn.Close()
 	}
+
+	m.Log(logger.Error, "run exit")
 
 	m.ctxCancel()
 
@@ -114,9 +117,11 @@ func (m *muxer) runInner() error {
 
 	select {
 	case <-m.ctx.Done():
+		m.Log(logger.Info, "terminated")
 		return fmt.Errorf("terminated")
 
 	case err := <-stream.ReaderError(m):
+		m.Log(logger.Error, "read stream error %v", err)
 		return err
 	}
 }
