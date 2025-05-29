@@ -300,7 +300,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamId:   es.Elementary_stream_id,
 						StreamType: uint8(mpeg2.PS_STREAM_H264),
 						Codec:      &mpegps.CodecH264{},
-						Complete:   true,
+						Complete:   false,
 						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_H264)] = track
