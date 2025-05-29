@@ -248,7 +248,6 @@ func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts u
 
 func (c *Conn) run() {
 	defer close(c.done)
-	fmt.Println("GB281818 conn run")
 
 	func() {
 		for {
@@ -277,8 +276,6 @@ func (c *Conn) run() {
 	if c.transport != nil {
 		c.transport.Close()
 	}
-
-	fmt.Println("GB281818 conn exit")
 }
 
 func (c *Conn) ProcessRtpPacket(pkt *rtp.Packet) {
