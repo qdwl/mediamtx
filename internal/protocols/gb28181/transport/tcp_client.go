@@ -94,10 +94,21 @@ func (c *TcpClient) runReader() {
 }
 
 func (c *TcpClient) Write(buf []byte) error {
-	c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
-	_, err := c.conn.Write(buf)
-	if err != nil {
-		return err
+	if c.conn != nil {
+		c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+
+		length := len(buf)
+		lengthBytes := []byte{byte(length >> 8), byte(length & 0xFF)}
+		_, err := c.conn.Write(lengthBytes)
+		if err != nil {
+			return err
+		}
+
+		_, err = c.conn.Write(buf)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }

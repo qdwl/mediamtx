@@ -32,7 +32,7 @@ require (
 	github.com/pion/rtp v1.8.15
 	github.com/pion/sdp/v3 v3.0.11
 	github.com/pion/webrtc/v4 v4.0.7
-	github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3
+	github.com/qdwl/mpegps v0.0.0-20250605070407-ae5590e16b75
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.38.0
 	golang.org/x/net v0.40.0

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -48,8 +47,8 @@ func (s *session) initialize() {
 	s.uuid = uuid.New()
 	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport)
 
-	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d",
-		s.req.pathName, s.portPair.RTPPort, s.req.transport)
+	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d",
+		s.req.pathName, s.portPair.RTPPort, s.req.transport, s.req.remoteIp, s.req.remotePort)
 
 	s.wg.Add(1)
 	go s.run()
@@ -72,19 +71,7 @@ func (s *session) Close() {
 func (s *session) run() {
 	defer s.wg.Done()
 
-	errStatusCode, err := s.runInner()
-
-	if !s.answerSent {
-		s.Log(logger.Info, "s.answerSent (%t)", s.answerSent)
-
-		select {
-		case s.req.res <- gb28181NewSessionRes{
-			err:           err,
-			errStatusCode: errStatusCode,
-		}:
-		case <-s.ctx.Done():
-		}
-	}
+	err := s.runInner()
 
 	s.ctxCancel()
 
@@ -93,18 +80,17 @@ func (s *session) run() {
 	s.Log(logger.Info, "closed (%v)", err)
 }
 
-func (s *session) runInner() (int, error) {
+func (s *session) runInner() error {
 	if s.req.direction == "recvonly" {
-		rv, err := s.runPublish()
-		return rv, err
+		return s.runPublish()
 	} else if s.req.direction == "sendonly" {
 		return s.runRead()
 	} else {
-		return 0, fmt.Errorf("unsupport direction")
+		return fmt.Errorf("unsupport direction")
 	}
 }
 
-func (s *session) runPublish() (int, error) {
+func (s *session) runPublish() error {
 	path, err := s.pathManager.AddPublisher(defs.PathAddPublisherReq{
 		Author: s,
 		AccessRequest: defs.PathAccessRequest{
@@ -120,26 +106,24 @@ func (s *session) runPublish() (int, error) {
 			// wait some seconds to mitigate brute force attacks
 			<-time.After(auth.PauseAfterError)
 
-			return http.StatusUnauthorized, err
+			return err
 		}
 
-		return http.StatusBadRequest, err
+		return err
 	}
 
 	defer path.RemovePublisher(defs.PathRemovePublisherReq{Author: s})
 
-	s.writeAnswer()
-
 	_, err = s.conn.ProbeTracks()
 	if err != nil {
-		return http.StatusBadRequest, err
+		return err
 	}
 
 	var stream *stream.Stream
 
 	medias, err := gb28181.ToStream(s.conn, &stream)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	stream, err = path.StartPublisher(defs.PathStartPublisherReq{
@@ -148,17 +132,17 @@ func (s *session) runPublish() (int, error) {
 		GenerateRTPPackets: true,
 	})
 	if err != nil {
-		return 0, err
+		return err
 	}
 	s.conn.StartRead()
 
 	select {
 	case <-s.ctx.Done():
-		return 0, nil
+		return nil
 	}
 }
 
-func (s *session) runRead() (int, error) {
+func (s *session) runRead() error {
 	var path defs.Path
 	var stream *stream.Stream
 	var err error
@@ -181,7 +165,7 @@ func (s *session) runRead() (int, error) {
 		}
 	}
 	if err != nil {
-		return 0, err
+		return err
 	}
 	s.path = path
 
@@ -189,7 +173,7 @@ func (s *session) runRead() (int, error) {
 
 	err = gb28181.FromStream(stream, s, s.conn)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	s.Log(logger.Info, "is reading from path '%s', %s",
@@ -200,24 +184,11 @@ func (s *session) runRead() (int, error) {
 
 	select {
 	case <-s.ctx.Done():
-		return 0, fmt.Errorf("terminated")
+		return fmt.Errorf("terminated")
 
 	case err := <-stream.ReaderError(s):
-		return 0, err
+		return err
 	}
-}
-
-func (s *session) writeAnswer() error {
-	select {
-	case s.req.res <- gb28181NewSessionRes{
-		sx: s,
-	}:
-		s.answerSent = true
-	case <-s.ctx.Done():
-		return fmt.Errorf("terminated")
-	}
-
-	return nil
 }
 
 // apiReaderDescribe implements reader.

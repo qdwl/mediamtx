@@ -9,7 +9,7 @@
 # Verbosity of the program; available values are "error", "warn", "info", "debug".
 logLevel: info
 # Destinations of log messages; available values are "stdout", "file" and "syslog".
-logDestinations: [file]
+logDestinations: [stdout]
 # If "file" is in logDestinations, this is the file which will receive the logs.
 logFile: mediamtx.log
 # If "syslog" is in logDestinations, use prefix for logs.
@@ -142,7 +142,7 @@ authJWTInHTTPQuery: true
 # Global settings -> Control API
 
 # Enable controlling the server through the Control API.
-api: no
+api: yes
 # Address of the Control API listener.
 apiAddress: :9997
 # Enable TLS/HTTPS on the Control API server.

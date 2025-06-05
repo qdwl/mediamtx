@@ -100,10 +100,20 @@ func (s *TcpServer) runReader() {
 }
 
 func (s *TcpServer) Write(buf []byte) error {
-	s.conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
-	_, err := s.conn.Write(buf)
-	if err != nil {
-		return err
+	if s.conn != nil {
+		s.conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+		length := len(buf)
+		lengthBytes := []byte{byte(length >> 8), byte(length & 0xFF)}
+		_, err := s.conn.Write(lengthBytes)
+		if err != nil {
+			return err
+		}
+
+		_, err = s.conn.Write(buf)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }

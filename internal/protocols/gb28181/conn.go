@@ -53,8 +53,6 @@ type Conn struct {
 	trackGatherComplete atomic.Bool
 	trackProbe          chan trackProbeReq
 	OnFrameFuncMap      map[uint8]OnFrameFunc
-	pts                 uint64
-	dts                 uint64
 	buf                 []byte
 	timebase            int64
 
@@ -91,8 +89,6 @@ func NewConn(
 		tracks:         make(map[uint8]*mpegps.Track),
 		trackProbe:     make(chan trackProbeReq),
 		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
-		pts:            0,
-		dts:            0,
 		buf:            make([]byte, 1500),
 		timebase:       time.Now().UnixMilli(),
 		frameCache:     make([]*PsFrame, 0),
@@ -111,9 +107,9 @@ func NewConn(
 	if protocol == UdpSocket {
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
 	} else if protocol == TcpClient {
-		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
+		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
 	} else if protocol == TcpServer {
-		c.transport = nil
+		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
 	}
 
 	c.muxer.OnPacket = c.OnMuxPacket
@@ -443,18 +439,12 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 }
 
 func (c *Conn) WriteVideo(frame []byte, pts uint64, dts uint64) {
-	c.pts = pts
-	c.dts = dts
-
 	if err := c.muxer.Write(c.vcid, frame, pts, dts); err != nil {
 		fmt.Printf("write video frame error %v\n", err)
 	}
 }
 
 func (c *Conn) WriteAudio(frame []byte, pts uint64, dts uint64) {
-	c.pts = pts
-	c.dts = dts
-
 	if err := c.muxer.Write(c.acid, frame, pts, dts); err != nil {
 		fmt.Printf("write audio frame error %v\n", err)
 	}

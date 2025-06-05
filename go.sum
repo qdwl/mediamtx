@@ -192,6 +192,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3 h1:AJ1AmkTggeZ42iBIk8eUplkib+XeExFIlsosEMwg250=
 github.com/qdwl/mpegps v0.0.0-20240817053323-ca2060f738c3/go.mod h1:tv+WpcQDbGULkZgw/9el6KASjArL/N0HtfbiPsiMvJM=
+github.com/qdwl/mpegps v0.0.0-20250605070407-ae5590e16b75 h1:C+ak/MYClzFajUgHAHXuYrwfQ/BOuIetHkBhLrIJ84M=
+github.com/qdwl/mpegps v0.0.0-20250605070407-ae5590e16b75/go.mod h1:tv+WpcQDbGULkZgw/9el6KASjArL/N0HtfbiPsiMvJM=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=

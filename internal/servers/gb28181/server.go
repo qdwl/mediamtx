@@ -265,17 +265,18 @@ func (s *Server) newSession(req gb28181NewSessionReq) gb28181NewSessionRes {
 	select {
 	case s.chNewSession <- req:
 		res1 := <-req.res
+		return res1
 
-		select {
-		case res2 := <-req.res:
-			return res2
+		// select {
+		// case res2 := <-req.res:
+		// 	return res2
 
-		case <-res1.sx.ctx.Done():
-			return gb28181NewSessionRes{
-				err:           fmt.Errorf("terminated"),
-				errStatusCode: http.StatusInternalServerError,
-			}
-		}
+		// case <-res1.sx.ctx.Done():
+		// 	return gb28181NewSessionRes{
+		// 		err:           fmt.Errorf("terminated"),
+		// 		errStatusCode: http.StatusInternalServerError,
+		// 	}
+		// }
 
 	case <-s.ctx.Done():
 		return gb28181NewSessionRes{
