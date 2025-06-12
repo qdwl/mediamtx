@@ -90,10 +90,10 @@ func NewConn(
 		trackProbe:     make(chan trackProbeReq),
 		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
 		buf:            make([]byte, 1500),
-		timebase:       time.Now().UnixMilli(),
-		frameCache:     make([]*PsFrame, 0),
-		packetChan:     make(chan mpeg2.Display),
-		done:           make(chan struct{}),
+		// timebase:       time.Now().UnixMilli(),
+		frameCache: make([]*PsFrame, 0),
+		packetChan: make(chan mpeg2.Display),
+		done:       make(chan struct{}),
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
@@ -214,7 +214,11 @@ func (c *Conn) StartRead() {
 }
 
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
-	// ts := time.Duration(pts)
+	if c.timebase == 0 {
+		// c.timebase = int64(pts)
+		c.timebase = time.Now().UnixMilli()
+	}
+	// ts := time.Duration(pts - uint64(c.timebase))
 	ts := time.Duration(time.Now().UnixMilli() - c.timebase)
 
 	if !c.startRead.Load() {
@@ -228,15 +232,18 @@ func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts u
 		f.Frame = append(f.Frame, frame...)
 		c.frameCache = append(c.frameCache, f)
 	} else {
-		cb, ok := c.OnFrameFuncMap[uint8(cid)]
-		if ok {
-			if len(c.frameCache) > 0 {
-				for _, val := range c.frameCache {
+		if len(c.frameCache) > 0 {
+			for _, val := range c.frameCache {
+				cb, ok := c.OnFrameFuncMap[uint8(val.CID)]
+				if ok {
 					cb(time.Duration(val.PTS), val.Frame)
 				}
-				c.frameCache = c.frameCache[:0]
 			}
+			c.frameCache = c.frameCache[:0]
+		}
 
+		cb, ok := c.OnFrameFuncMap[uint8(cid)]
+		if ok {
 			cb(ts, frame)
 		}
 	}

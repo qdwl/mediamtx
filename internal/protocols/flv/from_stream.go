@@ -192,7 +192,6 @@ func setupAudio(
 
 				for i, au := range tunit.AUs {
 					pts := tunit.PTS + int64(i)*mpeg4audio.SamplesPerAccessUnit
-
 					err := (*w).WriteMPEG4Audio(
 						timestampToDuration(pts, audioFormatMPEG4Audio.ClockRate()),
 						au,

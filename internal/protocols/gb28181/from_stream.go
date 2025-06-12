@@ -2,6 +2,7 @@ package gb28181
 
 import (
 	"errors"
+	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
@@ -15,6 +16,16 @@ import (
 
 var errNoSupportedCodecsFrom = errors.New(
 	"the stream doesn't contain any supported codec, which are currently H264, HEVC, MPEG-4 Audio, MPEG-1/2 Audio")
+
+func multiplyAndDivide2(v, m, d time.Duration) time.Duration {
+	secs := v / d
+	dec := v % d
+	return (secs*m + dec*m/d)
+}
+
+func timestampToDuration(t int64, clockRate int) time.Duration {
+	return multiplyAndDivide2(time.Duration(t), time.Second, time.Duration(clockRate))
+}
 
 func setupVideo(
 	str *stream.Stream,
@@ -190,7 +201,9 @@ func setupAudio(
 
 				for i, au := range tunit.AUs {
 					pts := tunit.PTS + int64(i)*mpeg4audio.SamplesPerAccessUnit
-					conn.WriteAudio(au, uint64(pts), uint64(pts))
+					ts := timestampToDuration(pts, audioFormatMPEG4Audio.ClockRate())
+
+					conn.WriteAudio(au, uint64(ts), uint64(ts))
 				}
 
 				return nil

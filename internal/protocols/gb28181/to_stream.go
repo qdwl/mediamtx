@@ -13,6 +13,16 @@ import (
 	"github.com/bluenviron/mediamtx/internal/unit"
 )
 
+func multiplyAndDivide(v, m, d int64) int64 {
+	secs := v / d
+	dec := v % d
+	return (secs*m + dec*m/d)
+}
+
+func durationToTimestamp(d time.Duration, clockRate int) int64 {
+	return multiplyAndDivide(int64(d), int64(clockRate), int64(time.Second))
+}
+
 var errNoSupportedCodecsTo = errors.New(
 	"the stream doesn't contain any supported codec, which are currently " +
 		"H265, H264, MPEG-4 Audio, MPEG-1/2 Audio, G711, LPCM")
@@ -104,13 +114,13 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 
 				aus := make([][]byte, len(pkts))
 				for i, pkt := range pkts {
-					aus[i] = pkt.AU
+					aus[i] = append(aus[i], pkt.AU...)
 				}
 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.MPEG4Audio{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: int64(pts),
+						PTS: durationToTimestamp(pts*time.Millisecond, codec.Config.SampleRate),
 					},
 					AUs: aus,
 				})
@@ -121,7 +131,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				Type: description.MediaTypeAudio,
 				Formats: []format.Format{&format.G711{
 					PayloadTyp:   98,
-					MULaw:        true,
+					MULaw:        false,
 					SampleRate:   8000,
 					ChannelCount: 1,
 				}},
@@ -144,7 +154,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				Type: description.MediaTypeAudio,
 				Formats: []format.Format{&format.G711{
 					PayloadTyp:   98,
-					MULaw:        false,
+					MULaw:        true,
 					SampleRate:   8000,
 					ChannelCount: 1,
 				}},
