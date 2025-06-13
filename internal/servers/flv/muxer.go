@@ -24,6 +24,7 @@ type muxer struct {
 	pathManager serverPathManager
 	parent      *Server
 	flvConn     *flv.Conn
+	transcoder  flv.AudioTranscoder
 
 	ctx       context.Context
 	ctxCancel func()
@@ -44,6 +45,7 @@ func (m *muxer) initialize() {
 
 func (m *muxer) Close() {
 	m.Log(logger.Error, "close muxer")
+	m.transcoder.Close()
 	m.ctxCancel()
 }
 
@@ -104,7 +106,7 @@ func (m *muxer) runInner() error {
 
 	defer m.path.RemoveReader(defs.PathRemoveReaderReq{Author: m})
 
-	err = flv.FromStream(stream, m, m.flvConn)
+	err = flv.FromStream(stream, m, m.flvConn, &m.transcoder)
 	if err != nil {
 		return err
 	}
