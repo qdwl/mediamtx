@@ -246,6 +246,13 @@ func FromStream(
 	if _, ok := audioFormat.(*format.MPEG4Audio); ok {
 		conn.AddAudioStream(mpeg2.PS_STREAM_AAC)
 	}
+	if forma, ok := audioFormat.(*format.G711); ok {
+		if forma.MULaw {
+			conn.AddAudioStream(mpeg2.PS_STREAM_G711U)
+		} else {
+			conn.AddAudioStream(mpeg2.PS_STREAM_G711A)
+		}
+	}
 
 	n := 1
 	for _, media := range str.Desc.Medias {
