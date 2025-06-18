@@ -274,10 +274,10 @@ func (s *session) runRead() (int, error) {
 			AccessRequest: req,
 		})
 		count++
-		if err == nil || count > 30 {
+		if err == nil || count > 100 {
 			break
 		} else {
-			s.Log(logger.Error, "find stream failed, %v", err)
+			s.Log(logger.Debug, "find stream failed, %v", err)
 			continue
 		}
 	}

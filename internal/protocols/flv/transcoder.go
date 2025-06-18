@@ -271,6 +271,9 @@ func (t *AudioTranscoder) initFifo() error {
 }
 
 func (t *AudioTranscoder) Transcode(pts time.Duration, au []byte) ([]AudioPacket, error) {
+	if len(au) == 0 {
+		return nil, nil
+	}
 	if t.decCtx == nil || t.encCtx == nil {
 		return nil, fmt.Errorf("terminated")
 	}

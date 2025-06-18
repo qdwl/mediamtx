@@ -44,8 +44,7 @@ func (m *muxer) initialize() {
 }
 
 func (m *muxer) Close() {
-	m.Log(logger.Error, "close muxer")
-	m.transcoder.Close()
+	m.Log(logger.Info, "close muxer")
 	m.ctxCancel()
 }
 
@@ -67,7 +66,7 @@ func (m *muxer) run() {
 		m.flvConn.Close()
 	}
 
-	m.Log(logger.Error, "run exit")
+	m.Log(logger.Info, "run exit")
 
 	m.ctxCancel()
 
@@ -91,10 +90,10 @@ func (m *muxer) runInner() error {
 			},
 		})
 		count++
-		if err == nil || count > 30 {
+		if err == nil || count > 100 {
 			break
 		} else {
-			m.Log(logger.Error, "find stream failed, %v", err)
+			m.Log(logger.Debug, "find stream failed, %v", err)
 			continue
 		}
 	}
@@ -115,6 +114,7 @@ func (m *muxer) runInner() error {
 		path.Name(), defs.FormatsInfo(stream.ReaderFormats(m)))
 
 	stream.StartReader(m)
+	defer m.transcoder.Close()
 	defer stream.RemoveReader(m)
 
 	select {

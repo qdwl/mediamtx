@@ -55,6 +55,10 @@ func setupVideo(
 					typ := h264.NALUType(nalu[0] & 0x1F)
 					switch typ {
 					case h264.NALUTypeIDR:
+						fallthrough
+					case h264.NALUTypeSPS:
+						fallthrough
+					case h264.NALUTypePPS:
 						idrPresent = true
 
 					case h264.NALUTypeNonIDR:
