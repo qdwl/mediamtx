@@ -161,7 +161,7 @@ func (s *session) runRead() error {
 		if err == nil || count > 100 {
 			break
 		} else {
-			s.Log(logger.Error, "find stream failed, %v", err)
+			s.Log(logger.Debug, "find stream failed, %v", err)
 			continue
 		}
 	}
