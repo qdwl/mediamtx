@@ -1,7 +1,6 @@
 package flv
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -102,18 +101,19 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 	// c.SetReadDeadline(time.Now().Add(60 * time.Second))
 	// c.SetWriteDeadline(time.Now().Add(60 * time.Second))
 
-	readerErr := make(chan error)
-	go func() {
-		for {
-			var msg string
-			err := websocket.Message.Receive(c, &msg)
-			if err != nil {
-				readerErr <- errors.New("terminated")
-				s.Log(logger.Info, "websocket connection read error %v", err)
-				return
-			}
-		}
-	}()
+	// readerErr := make(chan error)
+	// go func() {
+	// 	for {
+	// 		var msg string
+	// 		err := websocket.Message.Receive(c, &msg)
+	// 		log.Printf("receive err:%v\n", err)
+	// 		if err != nil {
+	// 			readerErr <- errors.New("terminated")
+	// 			s.Log(logger.Info, "websocket connection read error %v", err)
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
 	for {
 		select {
@@ -149,9 +149,9 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 			s.Log(logger.Info, "websocket conn done")
 			return
 
-		case err := <-readerErr:
-			s.Log(logger.Info, "websocket conn error %v", err)
-			return
+			// case err := <-readerErr:
+			// 	s.Log(logger.Info, "websocket conn error %v", err)
+			// 	return
 		}
 	}
 }
