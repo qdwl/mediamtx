@@ -45,7 +45,7 @@ func (s *session) initialize() {
 	s.ctxCancel = ctxCancel
 	s.created = time.Now()
 	s.uuid = uuid.New()
-	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport)
+	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport, s.req.payloadType)
 
 	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d",
 		s.req.pathName, s.portPair.RTPPort, s.req.transport, s.req.remoteIp, s.req.remotePort)
@@ -62,6 +62,7 @@ func (s *session) Log(level logger.Level, format string, args ...interface{}) {
 
 func (s *session) Update(req gb28181UpdateSessionReq) {
 	s.conn.SetRemoteAddr(req.remoteIp, req.remotePort)
+	s.conn.SetPayloadType(req.payloadType)
 }
 
 func (s *session) Close() {
@@ -157,7 +158,7 @@ func (s *session) runRead() error {
 			},
 		})
 		count++
-		if err == nil || count > 30 {
+		if err == nil || count > 100 {
 			break
 		} else {
 			s.Log(logger.Error, "find stream failed, %v", err)

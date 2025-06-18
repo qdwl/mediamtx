@@ -79,35 +79,45 @@ func (t *AudioTranscoder) Initialize(src format.Format, dst format.Format) error
 
 func (t *AudioTranscoder) Close() {
 	if t.decCtx != nil {
-		C.avcodec_free_context(&t.decCtx)
+		C.avcodec_close(t.decCtx)
+		// C.avcodec_free_context(&t.decCtx)
+		t.decCtx = nil
 	}
 
 	if t.decFrame != nil {
 		C.av_frame_free(&t.decFrame)
+		t.decFrame = nil
 	}
 
 	if t.decPacket != nil {
 		C.av_packet_free(&t.decPacket)
+		t.decPacket = nil
 	}
 
 	if t.swrCtx != nil {
 		C.swr_free(&t.swrCtx)
+		t.swrCtx = nil
 	}
 
 	if t.encCtx != nil {
-		C.avcodec_free_context(&t.encCtx)
+		C.avcodec_close(t.encCtx)
+		// C.avcodec_free_context(&t.encCtx)
+		t.encCtx = nil
 	}
 
 	if t.encFrame != nil {
 		C.av_frame_free(&t.encFrame)
+		t.encFrame = nil
 	}
 
 	if t.encPacket != nil {
 		C.av_packet_free(&t.encPacket)
+		t.encPacket = nil
 	}
 
 	if t.fifo != nil {
 		C.av_audio_fifo_free(t.fifo)
+		t.fifo = nil
 	}
 }
 
@@ -261,6 +271,9 @@ func (t *AudioTranscoder) initFifo() error {
 }
 
 func (t *AudioTranscoder) Transcode(pts time.Duration, au []byte) ([]AudioPacket, error) {
+	if t.decCtx == nil || t.encCtx == nil {
+		return nil, fmt.Errorf("terminated")
+	}
 	err := t.decodeAndResample(au, pts.Milliseconds())
 	if err != nil {
 		return nil, err

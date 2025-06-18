@@ -16,6 +16,37 @@ import (
 	mpeg2 "github.com/qdwl/mpegps"
 )
 
+const (
+	// 音频编码类型
+	PayloadTypePCMU     = 0  // G.711 μ-law
+	PayloadTypeGSM      = 3  // GSM 6.10
+	PayloadTypeG723     = 4  // G.723.1
+	PayloadTypeDVI4_8K  = 5  // DVI4 8kHz
+	PayloadTypeDVI4_16K = 6  // DVI4 16kHz
+	PayloadTypeLPC      = 7  // LPC
+	PayloadTypePCMA     = 8  // G.711 A-law
+	PayloadTypeG722     = 9  // G.722
+	PayloadTypeL16_2    = 10 // L16 2通道
+	PayloadTypeL16_1    = 11 // L16 单通道
+	PayloadTypeQCELP    = 12 // QCELP
+	PayloadTypeCN       = 13 // Comfort Noise
+	PayloadTypeMPA      = 14 // MPEG Audio
+	PayloadTypeG728     = 15 // G.728
+	PayloadTypeDVI4_11K = 16 // DVI4 11.025kHz
+	PayloadTypeDVI4_22K = 17 // DVI4 22.05kHz
+	PayloadTypeG729     = 18 // G.729
+
+	// 视频编码类型
+	PayloadTypeCelB   = 25 // CelB
+	PayloadTypeJPEG   = 26 // JPEG
+	PayloadTypeNV     = 28 // nv
+	PayloadTypeH261   = 31 // H.261
+	PayloadTypeMPV    = 32 // MPEG Video
+	PayloadTypeMP2T   = 33 // MPEG2 Transport
+	PayloadTypeH263   = 34 // H.263
+	PayloadTypeMepgPs = 96
+)
+
 // OnFrameFunc is the prototype of the callback passed to OnFrameFunc().
 type OnFrameFunc func(pts time.Duration, data []byte)
 
@@ -55,6 +86,7 @@ type Conn struct {
 	OnFrameFuncMap      map[uint8]OnFrameFunc
 	buf                 []byte
 	timebase            int64
+	payloadType         uint8
 
 	vcid uint8
 	acid uint8
@@ -76,6 +108,7 @@ func NewConn(
 	remoteIp string,
 	remotePort int,
 	protocol int,
+	payloadType uint8,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parentCtx)
 
@@ -90,6 +123,7 @@ func NewConn(
 		trackProbe:     make(chan trackProbeReq),
 		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
 		buf:            make([]byte, 1500),
+		payloadType:    payloadType,
 		// timebase:       time.Now().UnixMilli(),
 		frameCache: make([]*PsFrame, 0),
 		packetChan: make(chan mpeg2.Display),
@@ -97,7 +131,7 @@ func NewConn(
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
-		PayloadType: 96,
+		PayloadType: c.payloadType,
 	}
 	c.rtpPacketizer.Init()
 
@@ -133,6 +167,11 @@ func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
 
 		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
 	}
+}
+
+func (c *Conn) SetPayloadType(pl uint8) {
+	c.payloadType = pl
+	c.rtpPacketizer.PayloadType = pl
 }
 
 func (c *Conn) Port() int {
@@ -452,8 +491,12 @@ func (c *Conn) WriteVideo(frame []byte, pts uint64, dts uint64) {
 }
 
 func (c *Conn) WriteAudio(frame []byte, pts uint64, dts uint64) {
-	if err := c.muxer.Write(c.acid, frame, pts, dts); err != nil {
-		fmt.Printf("write audio frame error %v\n", err)
+	if c.payloadType == PayloadTypeMepgPs {
+		if err := c.muxer.Write(c.acid, frame, pts, dts); err != nil {
+			fmt.Printf("write audio frame error %v\n", err)
+		}
+	} else {
+		c.OnMuxPacket(frame, pts)
 	}
 }
 

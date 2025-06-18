@@ -78,12 +78,13 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 	}
 
 	res := s.parent.newSession(gb28181NewSessionReq{
-		pathName:   pathName,
-		ssrc:       req.SSRC,
-		remoteIp:   req.RemoteIP,
-		remotePort: req.RemotePort,
-		direction:  strings.ToLower(req.Direction),
-		transport:  req.Transport,
+		pathName:    pathName,
+		ssrc:        req.SSRC,
+		payloadType: req.PayloadType,
+		remoteIp:    req.RemoteIP,
+		remotePort:  req.RemotePort,
+		direction:   strings.ToLower(req.Direction),
+		transport:   req.Transport,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {
@@ -110,11 +111,12 @@ func (s *httpServer) onUpdateStream(ctx *gin.Context) {
 	}
 
 	res := s.parent.updateSession(gb28181UpdateSessionReq{
-		pathName:   pathName,
-		ssrc:       req.SSRC,
-		sessionId:  req.SessionID,
-		remoteIp:   req.RemoteIP,
-		remotePort: req.RemotePort,
+		pathName:    pathName,
+		ssrc:        req.SSRC,
+		payloadType: req.PayloadType,
+		sessionId:   req.SessionID,
+		remoteIp:    req.RemoteIP,
+		remotePort:  req.RemotePort,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {

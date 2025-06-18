@@ -14,11 +14,12 @@ import (
 )
 
 type GB28181CreateReq struct {
-	SSRC       string `json:"ssrc"`
-	RemoteIP   string `json:"remoteIp"`
-	RemotePort int    `json:"remotePort"`
-	Transport  int    `json:"transport"`
-	Direction  string `json:"direction"`
+	SSRC        string `json:"ssrc"`
+	PayloadType uint8  `json:"payloadType"`
+	RemoteIP    string `json:"remoteIp"`
+	RemotePort  int    `json:"remotePort"`
+	Transport   int    `json:"transport"`
+	Direction   string `json:"direction"`
 }
 
 type GB28181CreateRes struct {
@@ -27,10 +28,11 @@ type GB28181CreateRes struct {
 }
 
 type GB28181UpdateReq struct {
-	SessionID  string `json:"sessionId"`
-	SSRC       string `json:"ssrc"`
-	RemoteIP   string `json:"remoteIp"`
-	RemotePort int    `json:"remotePort"`
+	SessionID   string `json:"sessionId"`
+	SSRC        string `json:"ssrc"`
+	PayloadType uint8  `json:"payloadType"`
+	RemoteIP    string `json:"remoteIp"`
+	RemotePort  int    `json:"remotePort"`
 }
 
 type GB28181DeleteReq struct {
@@ -44,13 +46,14 @@ type gb28181NewSessionRes struct {
 }
 
 type gb28181NewSessionReq struct {
-	pathName   string
-	ssrc       string
-	remoteIp   string
-	remotePort int
-	transport  int
-	direction  string
-	res        chan gb28181NewSessionRes
+	pathName    string
+	ssrc        string
+	payloadType uint8
+	remoteIp    string
+	remotePort  int
+	transport   int
+	direction   string
+	res         chan gb28181NewSessionRes
 }
 
 type gb28181UpdateSessionRes struct {
@@ -59,12 +62,13 @@ type gb28181UpdateSessionRes struct {
 }
 
 type gb28181UpdateSessionReq struct {
-	pathName   string
-	sessionId  string
-	ssrc       string
-	remoteIp   string
-	remotePort int
-	res        chan gb28181UpdateSessionRes
+	pathName    string
+	sessionId   string
+	ssrc        string
+	payloadType uint8
+	remoteIp    string
+	remotePort  int
+	res         chan gb28181UpdateSessionRes
 }
 
 type gb28181DeleteSessionRes struct {

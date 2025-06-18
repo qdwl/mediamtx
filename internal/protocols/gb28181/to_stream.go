@@ -130,7 +130,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 			medi := &description.Media{
 				Type: description.MediaTypeAudio,
 				Formats: []format.Format{&format.G711{
-					PayloadTyp:   98,
+					PayloadTyp:   8,
 					MULaw:        false,
 					SampleRate:   8000,
 					ChannelCount: 1,
@@ -153,7 +153,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 			medi := &description.Media{
 				Type: description.MediaTypeAudio,
 				Formats: []format.Format{&format.G711{
-					PayloadTyp:   98,
+					PayloadTyp:   0,
 					MULaw:        true,
 					SampleRate:   8000,
 					ChannelCount: 1,

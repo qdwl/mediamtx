@@ -15,7 +15,7 @@ import (
 )
 
 var errNoSupportedCodecsFrom = errors.New(
-	"the stream doesn't contain any supported codec, which are currently H264, HEVC, MPEG-4 Audio, MPEG-1/2 Audio")
+	"the stream doesn't contain any supported codec, which are currently H264, HEVC, MPEG-4 Audio, G711")
 
 func multiplyAndDivide2(v, m, d time.Duration) time.Duration {
 	secs := v / d
@@ -210,6 +210,26 @@ func setupAudio(
 			})
 
 		return audioFormatMPEG4Audio
+	}
+
+	var g711Format *format.G711
+	audioMedia = str.Desc.FindFormat(&g711Format)
+	if audioMedia != nil {
+		str.AddReader(
+			reader,
+			audioMedia,
+			g711Format,
+			func(u unit.Unit) error {
+				tunit := u.(*unit.G711)
+
+				ts := timestampToDuration(tunit.PTS, g711Format.ClockRate())
+				ts = ts / time.Millisecond
+				conn.WriteAudio(tunit.Samples, uint64(ts), uint64(ts))
+
+				return nil
+			})
+
+		return g711Format
 	}
 
 	return nil
