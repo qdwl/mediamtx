@@ -10,6 +10,7 @@ package flv
 import "C"
 import (
 	"fmt"
+	"log"
 	"time"
 	"unsafe"
 
@@ -169,6 +170,7 @@ func (t *AudioTranscoder) initEncoder(forma format.Format) error {
 	if err != nil {
 		return err
 	}
+
 	codec := C.avcodec_find_encoder(codecId)
 	if codec == nil {
 		return fmt.Errorf("avcodec_find_encoder() failed")
@@ -236,6 +238,7 @@ func (t *AudioTranscoder) initSwr(decCtx *C.AVCodecContext, encCtx *C.AVCodecCon
 	}
 
 	if res := C.swr_init(t.swrCtx); res < 0 {
+		log.Printf("init swr failed res:%d\n", res)
 		return fmt.Errorf("init swr failed")
 	}
 
@@ -277,6 +280,7 @@ func (t *AudioTranscoder) Transcode(pts time.Duration, au []byte) ([]AudioPacket
 	if t.decCtx == nil || t.encCtx == nil {
 		return nil, fmt.Errorf("terminated")
 	}
+
 	err := t.decodeAndResample(au, pts.Milliseconds())
 	if err != nil {
 		return nil, err
@@ -302,6 +306,14 @@ func (t *AudioTranscoder) decodeAndResample(data []byte, pts int64) error {
 		}
 		if res < 0 {
 			return fmt.Errorf("decoding error %d", res)
+		}
+
+		if t.decCtx.channel_layout == 0 {
+			if t.decFrame.channel_layout != 0 {
+				t.decCtx.channel_layout = t.decFrame.channel_layout
+			} else if t.decFrame.channels > 0 {
+				t.decCtx.channel_layout = C.ulong(C.av_get_default_channel_layout(t.decFrame.channels))
+			}
 		}
 
 		// Decoder is OK now, try to init swr if not initialized.

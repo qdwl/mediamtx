@@ -4,12 +4,13 @@
   <br>
   <br>
 
-  [![Test](https://github.com/bluenviron/mediamtx/actions/workflows/code_test.yml/badge.svg)](https://github.com/bluenviron/mediamtx/actions/workflows/code_test.yml)
-  [![Lint](https://github.com/bluenviron/mediamtx/actions/workflows/code_lint.yml/badge.svg)](https://github.com/bluenviron/mediamtx/actions/workflows/code_lint.yml)
-  [![CodeCov](https://codecov.io/gh/bluenviron/mediamtx/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bluenviron/mediamtx/tree/main)
-  [![Release](https://img.shields.io/github/v/release/bluenviron/mediamtx)](https://github.com/bluenviron/mediamtx/releases)
-  [![Docker Hub](https://img.shields.io/badge/docker-bluenviron/mediamtx-blue)](https://hub.docker.com/r/bluenviron/mediamtx)
-  [![API Documentation](https://img.shields.io/badge/api-documentation-blue)](https://bluenviron.github.io/mediamtx)
+[![Test](https://github.com/bluenviron/mediamtx/actions/workflows/code_test.yml/badge.svg)](https://github.com/bluenviron/mediamtx/actions/workflows/code_test.yml)
+[![Lint](https://github.com/bluenviron/mediamtx/actions/workflows/code_lint.yml/badge.svg)](https://github.com/bluenviron/mediamtx/actions/workflows/code_lint.yml)
+[![CodeCov](https://codecov.io/gh/bluenviron/mediamtx/branch/main/graph/badge.svg)](https://app.codecov.io/gh/bluenviron/mediamtx/tree/main)
+[![Release](https://img.shields.io/github/v/release/bluenviron/mediamtx)](https://github.com/bluenviron/mediamtx/releases)
+[![Docker Hub](https://img.shields.io/badge/docker-bluenviron/mediamtx-blue)](https://hub.docker.com/r/bluenviron/mediamtx)
+[![API Documentation](https://img.shields.io/badge/api-documentation-blue)](https://bluenviron.github.io/mediamtx)
+
 </h1>
 
 <br>
@@ -18,52 +19,52 @@ _MediaMTX_ is a ready-to-use and zero-dependency real-time media server and medi
 
 Live streams can be published to the server with:
 
-|protocol|variants|video codecs|audio codecs|
-|--------|--------|------------|------------|
-|[SRT clients](#srt-clients)||H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3|
-|[SRT cameras and servers](#srt-cameras-and-servers)||H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3|
-|[WebRTC clients](#webrtc-clients)|WHIP|AV1, VP9, VP8, [H265](#supported-browsers), H264|Opus, G722, G711 (PCMA, PCMU)|
-|[WebRTC servers](#webrtc-servers)|WHEP|AV1, VP9, VP8, [H265](#supported-browsers), H264|Opus, G722, G711 (PCMA, PCMU)|
-|[RTSP clients](#rtsp-clients)|UDP, TCP, RTSPS|AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec|
-|[RTSP cameras and servers](#rtsp-cameras-and-servers)|UDP, UDP-Multicast, TCP, RTSPS|AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec|
-|[RTMP clients](#rtmp-clients)|RTMP, RTMPS, Enhanced RTMP|AV1, VP9, H265, H264|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM|
-|[RTMP cameras and servers](#rtmp-cameras-and-servers)|RTMP, RTMPS, Enhanced RTMP|AV1, VP9, H265, H264|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM|
-|[HLS cameras and servers](#hls-cameras-and-servers)|Low-Latency HLS, MP4-based HLS, legacy HLS|AV1, VP9, [H265](#supported-browsers-1), H264|Opus, MPEG-4 Audio (AAC)|
-|[UDP/MPEG-TS](#udpmpeg-ts)|Unicast, broadcast, multicast|H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3|
-|[Raspberry Pi Cameras](#raspberry-pi-cameras)||H264||
+| protocol                                              | variants                                   | video codecs                                                                                              | audio codecs                                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [SRT clients](#srt-clients)                           |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [SRT cameras and servers](#srt-cameras-and-servers)   |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [WebRTC clients](#webrtc-clients)                     | WHIP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
+| [WebRTC servers](#webrtc-servers)                     | WHEP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
+| [RTSP clients](#rtsp-clients)                         | UDP, TCP, RTSPS                            | AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec |
+| [RTSP cameras and servers](#rtsp-cameras-and-servers) | UDP, UDP-Multicast, TCP, RTSPS             | AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec |
+| [RTMP clients](#rtmp-clients)                         | RTMP, RTMPS, Enhanced RTMP                 | AV1, VP9, H265, H264                                                                                      | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM                                          |
+| [RTMP cameras and servers](#rtmp-cameras-and-servers) | RTMP, RTMPS, Enhanced RTMP                 | AV1, VP9, H265, H264                                                                                      | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM                                          |
+| [HLS cameras and servers](#hls-cameras-and-servers)   | Low-Latency HLS, MP4-based HLS, legacy HLS | AV1, VP9, [H265](#supported-browsers-1), H264                                                             | Opus, MPEG-4 Audio (AAC)                                                                                               |
+| [UDP/MPEG-TS](#udpmpeg-ts)                            | Unicast, broadcast, multicast              | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [Raspberry Pi Cameras](#raspberry-pi-cameras)         |                                            | H264                                                                                                      |                                                                                                                        |
 
 Live streams can be read from the server with:
 
-|protocol|variants|video codecs|audio codecs|
-|--------|--------|------------|------------|
-|[SRT](#srt)||H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3|
-|[WebRTC](#webrtc)|WHEP|AV1, VP9, VP8, [H265](#supported-browsers), H264|Opus, G722, G711 (PCMA, PCMU)|
-|[RTSP](#rtsp)|UDP, UDP-Multicast, TCP, RTSPS|AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec|
-|[RTMP](#rtmp)|RTMP, RTMPS, Enhanced RTMP|H264|MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3)|
-|[HLS](#hls)|Low-Latency HLS, MP4-based HLS, legacy HLS|AV1, VP9, [H265](#supported-browsers-1), H264|Opus, MPEG-4 Audio (AAC)|
+| protocol          | variants                                   | video codecs                                                                                              | audio codecs                                                                                                           |
+| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [SRT](#srt)       |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [WebRTC](#webrtc) | WHEP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
+| [RTSP](#rtsp)     | UDP, UDP-Multicast, TCP, RTSPS             | AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec |
+| [RTMP](#rtmp)     | RTMP, RTMPS, Enhanced RTMP                 | H264                                                                                                      | MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3)                                                                               |
+| [HLS](#hls)       | Low-Latency HLS, MP4-based HLS, legacy HLS | AV1, VP9, [H265](#supported-browsers-1), H264                                                             | Opus, MPEG-4 Audio (AAC)                                                                                               |
 
 Live streams be recorded and played back with:
 
-|format|video codecs|audio codecs|
-|------|------------|------------|
-|[fMP4](#record-streams-to-disk)|AV1, VP9, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM|
-|[MPEG-TS](#record-streams-to-disk)|H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video|Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3|
+| format                             | video codecs                                                            | audio codecs                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [fMP4](#record-streams-to-disk)    | AV1, VP9, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM |
+| [MPEG-TS](#record-streams-to-disk) | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                   | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                          |
 
 **Features**
 
-* Publish live streams to the server
-* Read live streams from the server
-* Streams are automatically converted from a protocol to another
-* Serve multiple streams at once in separate paths
-* Record streams to disk
-* Playback recorded streams
-* Authenticate users
-* Redirect readers to other RTSP servers (load balancing)
-* Control the server through the Control API
-* Reload the configuration without disconnecting existing clients (hot reloading)
-* Read Prometheus-compatible metrics
-* Run hooks (external commands) when clients connect, disconnect, read or publish streams
-* Compatible with Linux, Windows and macOS, does not require any dependency or interpreter, it's a single executable
+- Publish live streams to the server
+- Read live streams from the server
+- Streams are automatically converted from a protocol to another
+- Serve multiple streams at once in separate paths
+- Record streams to disk
+- Playback recorded streams
+- Authenticate users
+- Redirect readers to other RTSP servers (load balancing)
+- Control the server through the Control API
+- Reload the configuration without disconnecting existing clients (hot reloading)
+- Read Prometheus-compatible metrics
+- Run hooks (external commands) when clients connect, disconnect, read or publish streams
+- Compatible with Linux, Windows and macOS, does not require any dependency or interpreter, it's a single executable
 
 **Note about rtsp-simple-server**
 
@@ -71,96 +72,96 @@ _rtsp-simple-server_ has been rebranded as _MediaMTX_. The reason is pretty obvi
 
 ## Table of contents
 
-* [Installation](#installation)
-  * [Standalone binary](#standalone-binary)
-  * [Docker image](#docker-image)
-  * [Arch Linux package](#arch-linux-package)
-  * [OpenWrt binary](#openwrt-binary)
-* [Basic usage](#basic-usage)
-* [Publish to the server](#publish-to-the-server)
-  * [By software](#by-software)
-    * [FFmpeg](#ffmpeg)
-    * [GStreamer](#gstreamer)
-    * [OBS Studio](#obs-studio)
-    * [OpenCV](#opencv)
-    * [Unity](#unity)
-    * [Web browsers](#web-browsers)
-  * [By device](#by-device)
-    * [Generic webcam](#generic-webcam)
-    * [Raspberry Pi Cameras](#raspberry-pi-cameras)
-      * [Adding audio](#adding-audio)
-      * [Secondary stream](#secondary-stream)
-  * [By protocol](#by-protocol)
-    * [SRT clients](#srt-clients)
-    * [SRT cameras and servers](#srt-cameras-and-servers)
-    * [WebRTC clients](#webrtc-clients)
-    * [WebRTC servers](#webrtc-servers)
-    * [RTSP clients](#rtsp-clients)
-    * [RTSP cameras and servers](#rtsp-cameras-and-servers)
-    * [RTMP clients](#rtmp-clients)
-    * [RTMP cameras and servers](#rtmp-cameras-and-servers)
-    * [HLS cameras and servers](#hls-cameras-and-servers)
-    * [UDP/MPEG-TS](#udpmpeg-ts)
-* [Read from the server](#read-from-the-server)
-  * [By software](#by-software-1)
-    * [FFmpeg](#ffmpeg-1)
-    * [GStreamer](#gstreamer-1)
-    * [VLC](#vlc)
-    * [Unity](#unity-1)
-    * [Web browsers](#web-browsers-1)
-  * [By protocol](#by-protocol-1)
-    * [SRT](#srt)
-    * [WebRTC](#webrtc)
-    * [RTSP](#rtsp)
-    * [RTMP](#rtmp)
-    * [HLS](#hls)
-* [Other features](#other-features)
-  * [Configuration](#configuration)
-  * [Authentication](#authentication)
-    * [Internal](#internal)
-    * [HTTP-based](#http-based)
-    * [JWT-based](#jwt-based)
-  * [Encrypt the configuration](#encrypt-the-configuration)
-  * [Remuxing, re-encoding, compression](#remuxing-re-encoding-compression)
-  * [Record streams to disk](#record-streams-to-disk)
-  * [Playback recorded streams](#playback-recorded-streams)
-  * [Forward streams to other servers](#forward-streams-to-other-servers)
-  * [Proxy requests to other servers](#proxy-requests-to-other-servers)
-  * [On-demand publishing](#on-demand-publishing)
-  * [Route absolute timestamps](#route-absolute-timestamps)
-  * [Expose the server in a subfolder](#expose-the-server-in-a-subfolder)
-  * [Start on boot](#start-on-boot)
-    * [Linux](#linux)
-    * [OpenWrt](#openwrt)
-    * [Windows](#windows)
-  * [Hooks](#hooks)
-  * [Control API](#control-api)
-  * [Metrics](#metrics)
-  * [pprof](#pprof)
-  * [SRT-specific features](#srt-specific-features)
-    * [Standard stream ID syntax](#standard-stream-id-syntax)
-  * [WebRTC-specific features](#webrtc-specific-features)
-    * [Authenticating with WHIP/WHEP](#authenticating-with-whipwhep)
-    * [Solving WebRTC connectivity issues](#solving-webrtc-connectivity-issues)
-    * [Supported browsers](#supported-browsers)
-  * [HLS-specific features](#hls-specific-features)
-    * [Supported browsers](#supported-browsers-1)
-  * [RTSP-specific features](#rtsp-specific-features)
-    * [Transport protocols](#transport-protocols)
-    * [Encryption](#encryption)
-    * [Corrupted frames](#corrupted-frames)
-  * [RTMP-specific features](#rtmp-specific-features)
-    * [Encryption](#encryption-1)
-* [Compile from source](#compile-from-source)
-  * [Standard](#standard)
-  * [OpenWrt](#openwrt-1)
-  * [Custom libcamera](#custom-libcamera)
-  * [Cross compile](#cross-compile)
-  * [Compile for all supported platforms](#compile-for-all-supported-platforms)
-  * [Docker image](#docker-image-1)
-* [License](#license)
-* [Specifications](#specifications)
-* [Related projects](#related-projects)
+- [Installation](#installation)
+  - [Standalone binary](#standalone-binary)
+  - [Docker image](#docker-image)
+  - [Arch Linux package](#arch-linux-package)
+  - [OpenWrt binary](#openwrt-binary)
+- [Basic usage](#basic-usage)
+- [Publish to the server](#publish-to-the-server)
+  - [By software](#by-software)
+    - [FFmpeg](#ffmpeg)
+    - [GStreamer](#gstreamer)
+    - [OBS Studio](#obs-studio)
+    - [OpenCV](#opencv)
+    - [Unity](#unity)
+    - [Web browsers](#web-browsers)
+  - [By device](#by-device)
+    - [Generic webcam](#generic-webcam)
+    - [Raspberry Pi Cameras](#raspberry-pi-cameras)
+      - [Adding audio](#adding-audio)
+      - [Secondary stream](#secondary-stream)
+  - [By protocol](#by-protocol)
+    - [SRT clients](#srt-clients)
+    - [SRT cameras and servers](#srt-cameras-and-servers)
+    - [WebRTC clients](#webrtc-clients)
+    - [WebRTC servers](#webrtc-servers)
+    - [RTSP clients](#rtsp-clients)
+    - [RTSP cameras and servers](#rtsp-cameras-and-servers)
+    - [RTMP clients](#rtmp-clients)
+    - [RTMP cameras and servers](#rtmp-cameras-and-servers)
+    - [HLS cameras and servers](#hls-cameras-and-servers)
+    - [UDP/MPEG-TS](#udpmpeg-ts)
+- [Read from the server](#read-from-the-server)
+  - [By software](#by-software-1)
+    - [FFmpeg](#ffmpeg-1)
+    - [GStreamer](#gstreamer-1)
+    - [VLC](#vlc)
+    - [Unity](#unity-1)
+    - [Web browsers](#web-browsers-1)
+  - [By protocol](#by-protocol-1)
+    - [SRT](#srt)
+    - [WebRTC](#webrtc)
+    - [RTSP](#rtsp)
+    - [RTMP](#rtmp)
+    - [HLS](#hls)
+- [Other features](#other-features)
+  - [Configuration](#configuration)
+  - [Authentication](#authentication)
+    - [Internal](#internal)
+    - [HTTP-based](#http-based)
+    - [JWT-based](#jwt-based)
+  - [Encrypt the configuration](#encrypt-the-configuration)
+  - [Remuxing, re-encoding, compression](#remuxing-re-encoding-compression)
+  - [Record streams to disk](#record-streams-to-disk)
+  - [Playback recorded streams](#playback-recorded-streams)
+  - [Forward streams to other servers](#forward-streams-to-other-servers)
+  - [Proxy requests to other servers](#proxy-requests-to-other-servers)
+  - [On-demand publishing](#on-demand-publishing)
+  - [Route absolute timestamps](#route-absolute-timestamps)
+  - [Expose the server in a subfolder](#expose-the-server-in-a-subfolder)
+  - [Start on boot](#start-on-boot)
+    - [Linux](#linux)
+    - [OpenWrt](#openwrt)
+    - [Windows](#windows)
+  - [Hooks](#hooks)
+  - [Control API](#control-api)
+  - [Metrics](#metrics)
+  - [pprof](#pprof)
+  - [SRT-specific features](#srt-specific-features)
+    - [Standard stream ID syntax](#standard-stream-id-syntax)
+  - [WebRTC-specific features](#webrtc-specific-features)
+    - [Authenticating with WHIP/WHEP](#authenticating-with-whipwhep)
+    - [Solving WebRTC connectivity issues](#solving-webrtc-connectivity-issues)
+    - [Supported browsers](#supported-browsers)
+  - [HLS-specific features](#hls-specific-features)
+    - [Supported browsers](#supported-browsers-1)
+  - [RTSP-specific features](#rtsp-specific-features)
+    - [Transport protocols](#transport-protocols)
+    - [Encryption](#encryption)
+    - [Corrupted frames](#corrupted-frames)
+  - [RTMP-specific features](#rtmp-specific-features)
+    - [Encryption](#encryption-1)
+- [Compile from source](#compile-from-source)
+  - [Standard](#standard)
+  - [OpenWrt](#openwrt-1)
+  - [Custom libcamera](#custom-libcamera)
+  - [Cross compile](#cross-compile)
+  - [Compile for all supported platforms](#compile-for-all-supported-platforms)
+  - [Docker image](#docker-image-1)
+- [License](#license)
+- [Specifications](#specifications)
+- [Related projects](#related-projects)
 
 ## Installation
 
@@ -186,12 +187,12 @@ docker run --rm -it --network=host bluenviron/mediamtx:latest
 
 Available images:
 
-|name|FFmpeg included|RPI Camera support|
-|----|---------------|------------------|
-|bluenviron/mediamtx:latest|:x:|:x:|
-|bluenviron/mediamtx:latest-ffmpeg|:heavy_check_mark:|:x:|
-|bluenviron/mediamtx:latest-rpi|:x:|:heavy_check_mark:|
-|bluenviron/mediamtx:latest-ffmpeg-rpi|:heavy_check_mark:|:heavy_check_mark:|
+| name                                  | FFmpeg included    | RPI Camera support |
+| ------------------------------------- | ------------------ | ------------------ |
+| bluenviron/mediamtx:latest            | :x:                | :x:                |
+| bluenviron/mediamtx:latest-ffmpeg     | :heavy_check_mark: | :x:                |
+| bluenviron/mediamtx:latest-rpi        | :x:                | :heavy_check_mark: |
+| bluenviron/mediamtx:latest-ffmpeg-rpi | :heavy_check_mark: | :heavy_check_mark: |
 
 The `--network=host` flag is mandatory for RTSP to work, since Docker can change the source port of UDP packets for routing reasons, and this doesn't allow the server to identify the senders of the packets.
 
@@ -320,36 +321,36 @@ gst-launch-1.0 videotestsrc \
 
 OBS Studio can publish to the server in multiple ways (SRT client, RTMP client, WebRTC client). The recommended one consists in publishing as a [RTMP client](#rtmp-clients). In `Settings -> Stream` (or in the Auto-configuration Wizard), use the following parameters:
 
-* Service: `Custom...`
-* Server: `rtmp://localhost/mystream`
-* Stream key: (empty)
+- Service: `Custom...`
+- Server: `rtmp://localhost/mystream`
+- Stream key: (empty)
 
 If credentials are in use, use the following parameters:
 
-* Service: `Custom...`
-* Server: `rtmp://localhost/mystream?user=myuser&pass=mypass`
-* Stream key: (empty)
+- Service: `Custom...`
+- Server: `rtmp://localhost/mystream?user=myuser&pass=mypass`
+- Stream key: (empty)
 
 Save the configuration and click `Start streaming`.
 
 If you want to generate a stream that can be read with WebRTC, open `Settings -> Output -> Recording` and use the following parameters:
 
-* FFmpeg output type: `Output to URL`
-* File path or URL: `rtsp://localhost:8554/mystream`
-* Container format: `rtsp`
-* Check `show all codecs (even if potentically incompatible)`
-* Video encoder: `h264_nvenc (libx264)`
-* Video encoder settings (if any): `bf=0`
-* Audio track: `1`
-* Audio encoder: `libopus`
+- FFmpeg output type: `Output to URL`
+- File path or URL: `rtsp://localhost:8554/mystream`
+- Container format: `rtsp`
+- Check `show all codecs (even if potentically incompatible)`
+- Video encoder: `h264_nvenc (libx264)`
+- Video encoder settings (if any): `bf=0`
+- Audio track: `1`
+- Audio encoder: `libopus`
 
 Then use the button `Start Recording` (instead of `Start Streaming`) to start streaming.
 
 Recent versions of OBS Studio can also publish to the server with the [WebRTC / WHIP protocol](#webrtc). Use the following parameters:
 
-* Service: `WHIP`
-* Server: `http://localhost:8889/mystream/whip`
-* Bearer Token: `myuser:mypass` (when internal authentication is enabled) or `JWT` (when JWT-based authentication is enabled)
+- Service: `WHIP`
+- Server: `http://localhost:8889/mystream/whip`
+- Bearer Token: `myuser:mypass` (when internal authentication is enabled) or `JWT` (when JWT-based authentication is enabled)
 
 Save the configuration and click `Start streaming`.
 
@@ -595,8 +596,8 @@ _MediaMTX_ natively supports most of the Raspberry Pi Camera models, enabling hi
 
 1. The server must run on a Raspberry Pi, with one of the following operating systems:
 
-   * Raspberry Pi OS Bookworm
-   * Raspberry Pi OS Bullseye
+   - Raspberry Pi OS Bookworm
+   - Raspberry Pi OS Bullseye
 
    Both 32 bit and 64 bit architectures are supported.
 
@@ -1296,11 +1297,11 @@ hlsServerCert: server.crt
 
 Keep also in mind that not all H264 video streams can be played on Apple Devices due to some intrinsic properties (distance between I-Frames, profile). If the video can't be played correctly, you can either:
 
-* re-encode it by following instructions in this README
-* disable the Low-latency variant of HLS and go back to the legacy variant:
+- re-encode it by following instructions in this README
+- disable the Low-latency variant of HLS and go back to the legacy variant:
 
   ```yml
-    hlsVariant: mpegts
+  hlsVariant: mpegts
   ```
 
 ##### Latency
@@ -1309,12 +1310,12 @@ in HLS, latency is introduced since a client must wait for the server to generat
 
 To decrease the latency, you can:
 
-* try decreasing the hlsPartDuration parameter
-* try decreasing the hlsSegmentDuration parameter
-* The segment duration is influenced by the interval between the IDR frames of the video track. An IDR frame is a frame that can be decoded independently from the others. The server changes the segment duration in order to include at least one IDR frame into each segment. Therefore, you need to decrease the interval between the IDR frames. This can be done in two ways:
+- try decreasing the hlsPartDuration parameter
+- try decreasing the hlsSegmentDuration parameter
+- The segment duration is influenced by the interval between the IDR frames of the video track. An IDR frame is a frame that can be decoded independently from the others. The server changes the segment duration in order to include at least one IDR frame into each segment. Therefore, you need to decrease the interval between the IDR frames. This can be done in two ways:
 
-  * if the stream is being hardware-generated (i.e. by a camera), there's usually a setting called Key-Frame Interval in the camera configuration page
-  * otherwise, the stream must be re-encoded. It's possible to tune the IDR frame interval by using ffmpeg's -g option:
+  - if the stream is being hardware-generated (i.e. by a camera), there's usually a setting called Key-Frame Interval in the camera configuration page
+  - otherwise, the stream must be re-encoded. It's possible to tune the IDR frame interval by using ffmpeg's -g option:
 
     ```sh
     ffmpeg -i rtsp://original-stream -c:v libx264 -pix_fmt yuv420p -preset ultrafast -b:v 600k -max_muxing_queue_size 1024 -g 30 -f rtsp rtsp://localhost:$RTSP_PORT/compressed
@@ -1330,8 +1331,8 @@ There are 3 ways to change the configuration:
 
 1. By editing the `mediamtx.yml` file, that is
 
-   * included into the release bundle
-   * available in the root folder of the Docker image (`/mediamtx.yml`); it can be overridden in this way:
+   - included into the release bundle
+   - available in the root folder of the Docker image (`/mediamtx.yml`); it can be overridden in this way:
 
      ```
      docker run --rm -it --network=host -v "$PWD/mediamtx.yml:/mediamtx.yml:ro" bluenviron/mediamtx
@@ -1371,32 +1372,32 @@ There are 3 ways to change the configuration:
 
 The server provides three methods to authenticate users:
 
-* Internal: users are stored in the configuration file
-* HTTP-based: an external HTTP URL is contacted to perform authentication
-* JWT: an external identity server provides authentication through JWTs
+- Internal: users are stored in the configuration file
+- HTTP-based: an external HTTP URL is contacted to perform authentication
+- JWT: an external identity server provides authentication through JWTs
 
 The internal authentication method is the default one. Users are stored inside the configuration file, in this format:
 
 ```yml
 authInternalUsers:
   # Username. 'any' means any user, including anonymous ones.
-- user: any
-  # Password. Not used in case of 'any' user.
-  pass:
-  # IPs or networks allowed to use this user. An empty list means any IP.
-  ips: []
-  # List of permissions.
-  permissions:
-    # Available actions are: publish, read, playback, api, metrics, pprof.
-  - action: publish
-    # Paths can be set to further restrict access to a specific path.
-    # An empty path means any path.
-    # Regular expressions can be used by using a tilde as prefix.
-    path:
-  - action: read
-    path:
-  - action: playback
-    path:
+  - user: any
+    # Password. Not used in case of 'any' user.
+    pass:
+    # IPs or networks allowed to use this user. An empty list means any IP.
+    ips: []
+    # List of permissions.
+    permissions:
+      # Available actions are: publish, read, playback, api, metrics, pprof.
+      - action: publish
+        # Paths can be set to further restrict access to a specific path.
+        # An empty path means any path.
+        # Regular expressions can be used by using a tilde as prefix.
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
 ```
 
 Only clients that provide username and passwords will be able to perform a certain action:
@@ -1415,10 +1416,10 @@ Then stored with the `argon2:` prefix:
 
 ```yml
 authInternalUsers:
-- user: argon2:$argon2id$v=19$m=4096,t=3,p=1$MTIzNDU2Nzg$OGGO0eCMN0ievb4YGSzvS/H+Vajx1pcbUmtLp2tRqRU
-  pass: argon2:$argon2i$v=19$m=4096,t=3,p=1$MTIzNDU2Nzg$oct3kOiFywTdDdt19kT07hdvmsPTvt9zxAUho2DLqZw
-  permissions:
-  - action: publish
+  - user: argon2:$argon2id$v=19$m=4096,t=3,p=1$MTIzNDU2Nzg$OGGO0eCMN0ievb4YGSzvS/H+Vajx1pcbUmtLp2tRqRU
+    pass: argon2:$argon2i$v=19$m=4096,t=3,p=1$MTIzNDU2Nzg$oct3kOiFywTdDdt19kT07hdvmsPTvt9zxAUho2DLqZw
+    permissions:
+      - action: publish
 ```
 
 To use SHA256, the string must be hashed with SHA256 and encoded with base64:
@@ -1431,10 +1432,10 @@ Then stored with the `sha256:` prefix:
 
 ```yml
 authInternalUsers:
-- user: sha256:j1tsRqDEw9xvq/D7/9tMx6Jh/jMhk3UfjwIB2f1zgMo=
-  pass: sha256:BdSWkrdV+ZxFBLUQQY7+7uv9RmiSVA8nrPmjGjJtZQQ=
-  permissions:
-  - action: publish
+  - user: sha256:j1tsRqDEw9xvq/D7/9tMx6Jh/jMhk3UfjwIB2f1zgMo=
+    pass: sha256:BdSWkrdV+ZxFBLUQQY7+7uv9RmiSVA8nrPmjGjJtZQQ=
+    permissions:
+      - action: publish
 ```
 
 **WARNING**: enable encryption or use a VPN to ensure that no one is intercepting the credentials in transit.
@@ -1481,9 +1482,9 @@ Some actions can be excluded from the process:
 # Actions to exclude from HTTP-based authentication.
 # Format is the same as the one of user permissions.
 authHTTPExclude:
-- action: api
-- action: metrics
-- action: pprof
+  - action: api
+  - action: metrics
+  - action: pprof
 ```
 
 #### JWT-based
@@ -1500,7 +1501,7 @@ The JWT is expected to contain a claim, with a list of permissions in the same f
 
 ```json
 {
- "mediamtx_permissions": [
+  "mediamtx_permissions": [
     {
       "action": "publish",
       "path": ""
@@ -1519,17 +1520,17 @@ Clients are expected to pass the JWT in one of the following ways (from best to 
 
 These are the recommended methods for each client:
 
-|client|protocol|method|notes|
-|------|--------|------|-----|
-|Web browsers|HLS|Authorization: Bearer||
-|Web browsers|WebRTC|Authorization: Bearer||
-|OBS Studio|WebRTC|Authorization: Bearer||
-|OBS Studio|RTMP|Query parameter||
-|FFmpeg|RTSP|Query parameter|password is truncated and cannot be used|
-|FFmpeg|RTMP|unsupported|Passwords and query parameters are currently truncated to 1024 characters by FFmpeg, so it's impossible to use FFMPEG+RTMP+JWT|
-|GStreamer|RTSP|Password||
-|GStreamer|RTMP|Query parameter||
-|any|SRT|unsupported|SRT truncates passwords and query parameters to 512 characters, so it's impossible to use SRT+JWT. See [#3430](https://github.com/bluenviron/mediamtx/issues/3430)|
+| client       | protocol | method                | notes                                                                                                                                                              |
+| ------------ | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web browsers | HLS      | Authorization: Bearer |                                                                                                                                                                    |
+| Web browsers | WebRTC   | Authorization: Bearer |                                                                                                                                                                    |
+| OBS Studio   | WebRTC   | Authorization: Bearer |                                                                                                                                                                    |
+| OBS Studio   | RTMP     | Query parameter       |                                                                                                                                                                    |
+| FFmpeg       | RTSP     | Query parameter       | password is truncated and cannot be used                                                                                                                           |
+| FFmpeg       | RTMP     | unsupported           | Passwords and query parameters are currently truncated to 1024 characters by FFmpeg, so it's impossible to use FFMPEG+RTMP+JWT                                     |
+| GStreamer    | RTSP     | Password              |                                                                                                                                                                    |
+| GStreamer    | RTMP     | Query parameter       |                                                                                                                                                                    |
+| any          | SRT      | unsupported           | SRT truncates passwords and query parameters to 512 characters, so it's impossible to use SRT+JWT. See [#3430](https://github.com/bluenviron/mediamtx/issues/3430) |
 
 Here's a tutorial on how to setup the [Keycloak identity server](https://www.keycloak.org/) in order to provide JWTs:
 
@@ -1545,11 +1546,11 @@ Here's a tutorial on how to setup the [Keycloak identity server](https://www.key
 
 4. Open tab _Mappers_, _Configure a new Mapper_, _User Attribute_
 
-   * Name: `mediamtx_permissions`
-   * User Attribute: `mediamtx_permissions`
-   * Token Claim Name: `mediamtx_permissions`
-   * Claim JSON Type: `JSON`
-   * Multivalued: `On`
+   - Name: `mediamtx_permissions`
+   - User Attribute: `mediamtx_permissions`
+   - Token Claim Name: `mediamtx_permissions`
+   - Claim JSON Type: `JSON`
+   - Multivalued: `On`
 
    Save
 
@@ -1563,8 +1564,8 @@ Here's a tutorial on how to setup the [Keycloak identity server](https://www.key
 
 9. Open tab _Attributes_, _Add an attribute_
 
-   * Key: `mediamtx_permissions`
-   * Value: `{"action":"publish", "path": ""}`
+   - Key: `mediamtx_permissions`
+   - Value: `{"action":"publish", "path": ""}`
 
    You can add as many attributes with key `mediamtx_permissions` as you want, each with a single permission in it
 
@@ -1589,7 +1590,16 @@ Here's a tutorial on how to setup the [Keycloak identity server](https://www.key
     The JWT is inside the `access_token` key of the response:
 
     ```json
-    {"access_token":"eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICIyNzVjX3ptOVlOdHQ0TkhwWVk4Und6ZndUclVGSzRBRmQwY3lsM2wtY3pzIn0.eyJleHAiOjE3MDk1NTUwOTIsImlhdCI6MTcwOTU1NDc5MiwianRpIjoiMzE3ZTQ1NGUtNzczMi00OTM1LWExNzAtOTNhYzQ2ODhhYWIxIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9tZWRpYW10eCIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiI2NTBhZDA5Zi03MDgxLTQyNGItODI4Ni0xM2I3YTA3ZDI0MWEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJtZWRpYW10eCIsInNlc3Npb25fc3RhdGUiOiJjYzJkNDhjYy1kMmU5LTQ0YjAtODkzZS0wYTdhNjJiZDI1YmQiLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbIi8qIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIiwiZGVmYXVsdC1yb2xlcy1tZWRpYW10eCJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoibWVkaWFtdHggcHJvZmlsZSBlbWFpbCIsInNpZCI6ImNjMmQ0OGNjLWQyZTktNDRiMC04OTNlLTBhN2E2MmJkMjViZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwibWVkaWFtdHhfcGVybWlzc2lvbnMiOlt7ImFjdGlvbiI6InB1Ymxpc2giLCJwYXRocyI6ImFsbCJ9XSwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdHVzZXIifQ.Gevz7rf1qHqFg7cqtSfSP31v_NS0VH7MYfwAdra1t6Yt5rTr9vJzqUeGfjYLQWR3fr4XC58DrPOhNnILCpo7jWRdimCnbPmuuCJ0AYM-Aoi3PAsWZNxgmtopq24_JokbFArY9Y1wSGFvF8puU64lt1jyOOyxf2M4cBHCs_EarCKOwuQmEZxSf8Z-QV9nlfkoTUszDCQTiKyeIkLRHL2Iy7Fw7_T3UI7sxJjVIt0c6HCNJhBBazGsYzmcSQ_GrmhbUteMTg00o6FicqkMBe99uZFnx9wIBm_QbO9hbAkkzF923I-DTAQrFLxT08ESMepDwmzFrmnwWYBLE3u8zuUlCA","expires_in":300,"refresh_expires_in":1800,"refresh_token":"eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI3OTI3Zjg4Zi05YWM4LTRlNmEtYWE1OC1kZmY0MDQzZDRhNGUifQ.eyJleHAiOjE3MDk1NTY1OTIsImlhdCI6MTcwOTU1NDc5MiwianRpIjoiMGVhZWFhMWItYzNhMC00M2YxLWJkZjAtZjI2NTRiODlkOTE3IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9tZWRpYW10eCIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MC9yZWFsbXMvbWVkaWFtdHgiLCJzdWIiOiI2NTBhZDA5Zi03MDgxLTQyNGItODI4Ni0xM2I3YTA3ZDI0MWEiLCJ0eXAiOiJSZWZyZXNoIiwiYXpwIjoibWVkaWFtdHgiLCJzZXNzaW9uX3N0YXRlIjoiY2MyZDQ4Y2MtZDJlOS00NGIwLTg5M2UtMGE3YTYyYmQyNWJkIiwic2NvcGUiOiJtZWRpYW10eCBwcm9maWxlIGVtYWlsIiwic2lkIjoiY2MyZDQ4Y2MtZDJlOS00NGIwLTg5M2UtMGE3YTYyYmQyNWJkIn0.yuXV8_JU0TQLuosNdp5xlYMjn7eO5Xq-PusdHzE7bsQ","token_type":"Bearer","not-before-policy":0,"session_state":"cc2d48cc-d2e9-44b0-893e-0a7a62bd25bd","scope":"mediamtx profile email"}
+    {
+      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICIyNzVjX3ptOVlOdHQ0TkhwWVk4Und6ZndUclVGSzRBRmQwY3lsM2wtY3pzIn0.eyJleHAiOjE3MDk1NTUwOTIsImlhdCI6MTcwOTU1NDc5MiwianRpIjoiMzE3ZTQ1NGUtNzczMi00OTM1LWExNzAtOTNhYzQ2ODhhYWIxIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9tZWRpYW10eCIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiI2NTBhZDA5Zi03MDgxLTQyNGItODI4Ni0xM2I3YTA3ZDI0MWEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJtZWRpYW10eCIsInNlc3Npb25fc3RhdGUiOiJjYzJkNDhjYy1kMmU5LTQ0YjAtODkzZS0wYTdhNjJiZDI1YmQiLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbIi8qIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIiwiZGVmYXVsdC1yb2xlcy1tZWRpYW10eCJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoibWVkaWFtdHggcHJvZmlsZSBlbWFpbCIsInNpZCI6ImNjMmQ0OGNjLWQyZTktNDRiMC04OTNlLTBhN2E2MmJkMjViZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwibWVkaWFtdHhfcGVybWlzc2lvbnMiOlt7ImFjdGlvbiI6InB1Ymxpc2giLCJwYXRocyI6ImFsbCJ9XSwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdHVzZXIifQ.Gevz7rf1qHqFg7cqtSfSP31v_NS0VH7MYfwAdra1t6Yt5rTr9vJzqUeGfjYLQWR3fr4XC58DrPOhNnILCpo7jWRdimCnbPmuuCJ0AYM-Aoi3PAsWZNxgmtopq24_JokbFArY9Y1wSGFvF8puU64lt1jyOOyxf2M4cBHCs_EarCKOwuQmEZxSf8Z-QV9nlfkoTUszDCQTiKyeIkLRHL2Iy7Fw7_T3UI7sxJjVIt0c6HCNJhBBazGsYzmcSQ_GrmhbUteMTg00o6FicqkMBe99uZFnx9wIBm_QbO9hbAkkzF923I-DTAQrFLxT08ESMepDwmzFrmnwWYBLE3u8zuUlCA",
+      "expires_in": 300,
+      "refresh_expires_in": 1800,
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI3OTI3Zjg4Zi05YWM4LTRlNmEtYWE1OC1kZmY0MDQzZDRhNGUifQ.eyJleHAiOjE3MDk1NTY1OTIsImlhdCI6MTcwOTU1NDc5MiwianRpIjoiMGVhZWFhMWItYzNhMC00M2YxLWJkZjAtZjI2NTRiODlkOTE3IiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9tZWRpYW10eCIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MC9yZWFsbXMvbWVkaWFtdHgiLCJzdWIiOiI2NTBhZDA5Zi03MDgxLTQyNGItODI4Ni0xM2I3YTA3ZDI0MWEiLCJ0eXAiOiJSZWZyZXNoIiwiYXpwIjoibWVkaWFtdHgiLCJzZXNzaW9uX3N0YXRlIjoiY2MyZDQ4Y2MtZDJlOS00NGIwLTg5M2UtMGE3YTYyYmQyNWJkIiwic2NvcGUiOiJtZWRpYW10eCBwcm9maWxlIGVtYWlsIiwic2lkIjoiY2MyZDQ4Y2MtZDJlOS00NGIwLTg5M2UtMGE3YTYyYmQyNWJkIn0.yuXV8_JU0TQLuosNdp5xlYMjn7eO5Xq-PusdHzE7bsQ",
+      "token_type": "Bearer",
+      "not-before-policy": 0,
+      "session_state": "cc2d48cc-d2e9-44b0-893e-0a7a62bd25bd",
+      "scope": "mediamtx profile email"
+    }
     ```
 
 ### Encrypt the configuration
@@ -1678,9 +1688,9 @@ http://localhost:9996/list?path=[mypath]&start=[start]&end=[end]
 
 Where:
 
-* [mypath] is the name of a path
-* [start] (optional) is the start date in [RFC3339 format](https://www.utctime.net/)
-* [end] (optional) is the end date in [RFC3339 format](https://www.utctime.net/)
+- [mypath] is the name of a path
+- [start] (optional) is the start date in [RFC3339 format](https://www.utctime.net/)
+- [end] (optional) is the end date in [RFC3339 format](https://www.utctime.net/)
 
 The server will return a list of timespans in JSON format:
 
@@ -1707,10 +1717,10 @@ http://localhost:9996/get?path=[mypath]&start=[start]&duration=[duration]&format
 
 Where:
 
-* [mypath] is the path name
-* [start] is the start date in [RFC3339 format](https://www.utctime.net/)
-* [duration] is the maximum duration of the recording in seconds
-* [format] (optional) is the output format of the stream. Available values are "fmp4" (default) and "mp4"
+- [mypath] is the path name
+- [start] is the start date in [RFC3339 format](https://www.utctime.net/)
+- [duration] is the maximum duration of the recording in seconds
+- [format] (optional) is the output format of the stream. Available values are "fmp4" (default) and "mp4"
 
 All parameters must be [url-encoded](https://www.urlencoder.org/). For instance:
 
@@ -1722,7 +1732,10 @@ The resulting stream uses the fMP4 format, that is natively compatible with any 
 
 ```html
 <video controls>
-  <source src="http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]" type="video/mp4" />
+  <source
+    src="http://localhost:9996/get?path=[mypath]&start=[start_date]&duration=[duration]"
+    type="video/mp4"
+  />
 </video>
 ```
 
@@ -1777,16 +1790,16 @@ The command inserted into `runOnDemand` will start only when a client requests t
 
 Some streaming protocols allow to route absolute timestamps, associated with each frame, that are useful for synchronizing several video or data streams together. In particular, _MediaMTX_ supports receiving absolute timestamps with the following protocols and devices:
 
-* HLS (through the `EXT-X-PROGRAM-DATE-TIME` tag in playlists)
-* RTSP (through RTCP reports, when `useAbsoluteTimestamp` is `true` in settings)
-* WebRTC (through RTCP reports, when `useAbsoluteTimestamp` is `true` in settings)
-* Raspberry Pi Camera
+- HLS (through the `EXT-X-PROGRAM-DATE-TIME` tag in playlists)
+- RTSP (through RTCP reports, when `useAbsoluteTimestamp` is `true` in settings)
+- WebRTC (through RTCP reports, when `useAbsoluteTimestamp` is `true` in settings)
+- Raspberry Pi Camera
 
 and supports sending absolute timestamps with the following protocols:
 
-* HLS (through the `EXT-X-PROGRAM-DATE-TIME` tag in playlists)
-* RTSP (through RTCP reports)
-* WebRTC (through RTCP reports)
+- HLS (through the `EXT-X-PROGRAM-DATE-TIME` tag in playlists)
+- RTSP (through RTCP reports)
+- WebRTC (through RTCP reports)
 
 A library that can read absolute timestamps with HLS is [gohlslib](https://github.com/bluenviron/gohlslib).
 
@@ -1798,9 +1811,9 @@ A browser can read read absolute timestamps with WebRTC if it exposes the [estim
 
 HTTP-based services (WebRTC, HLS, Control API, Playback Server, Metrics, pprof) can be exposed in a subfolder of an existing HTTP server or reverse proxy. The reverse proxy must be able to intercept HTTP requests addressed to MediaMTX and corresponding responses, and perform the following changes:
 
-* The subfolder path must be stripped from request paths. For instance, if the server is exposed behind `/subpath` and the reverse proxy receives a request with path `/subpath/mystream/index.m3u8`, this has to be changed into `/mystream/index.m3u8`.
+- The subfolder path must be stripped from request paths. For instance, if the server is exposed behind `/subpath` and the reverse proxy receives a request with path `/subpath/mystream/index.m3u8`, this has to be changed into `/mystream/index.m3u8`.
 
-* Any `Location` header in responses must be prefixed with the subfolder path. For instance, if the server is exposed behind `/subpath` and the server sends a response with `Location: /mystream/index.m3u8`, this has to be changed into `Location: /subfolder/mystream/index.m3u8`.
+- Any `Location` header in responses must be prefixed with the subfolder path. For instance, if the server is exposed behind `/subpath` and the server sends a response with `Location: /mystream/index.m3u8`, this has to be changed into `Location: /subfolder/mystream/index.m3u8`.
 
 If _nginx_ is the reverse proxy, this can be achieved with the following configuration:
 
@@ -2261,10 +2274,10 @@ srt://localhost:8890?streamid=#!::m=publish,r=mypath,u=myuser,s=mypass&pkt_size=
 
 Where:
 
-* key `m` contains the action (`publish` or `request`)
-* key `r` contains the path
-* key `u` contains the username
-* key `s` contains the password
+- key `m` contains the action (`publish` or `request`)
+- key `r` contains the path
+- key `u` contains the username
+- key `s` contains the password
 
 ### WebRTC-specific features
 
@@ -2272,7 +2285,7 @@ Where:
 
 When using WHIP or WHEP to establish a WebRTC connection, there are several ways to provide credentials.
 
-* If internal authentication or HTTP-based authentication is in use, username and password can be passed through the `Authorization: Basic` HTTP header:
+- If internal authentication or HTTP-based authentication is in use, username and password can be passed through the `Authorization: Basic` HTTP header:
 
   ```
   Authorization: Basic base64(user:pass)
@@ -2286,7 +2299,7 @@ When using WHIP or WHEP to establish a WebRTC connection, there are several ways
   Authorization: Bearer username:password
   ```
 
-* If JWT-based authentication is in use, the JWT can be passed through the `Authorization: Bearer` header:
+- If JWT-based authentication is in use, the JWT can be passed through the `Authorization: Bearer` header:
 
   ```
   Authorization: Bearer MY_JWT
@@ -2330,9 +2343,9 @@ If you really still have problems, you can force all WebRTC/ICE connections to p
 
 ```yml
 webrtcICEServers2:
-- url: turn:host:port
-  username: user
-  password: password
+  - url: turn:host:port
+    username: user
+    password: password
 ```
 
 Where user and pass are the username and password of the server. Note that port is not optional.
@@ -2341,21 +2354,21 @@ If the server uses a secret-based authentication (for instance, coturn with the 
 
 ```yml
 webrtcICEServers2:
-- url: turn:host:port
-  username: AUTH_SECRET
-  password: secret
+  - url: turn:host:port
+    username: AUTH_SECRET
+    password: secret
 ```
 
 where secret is the secret of the TURN server. MediaMTX will generate a set of credentials by using the secret, and credentials will be sent to clients before the WebRTC/ICE connection is established.
 
-In some cases you may want the browser to connect using TURN servers but have mediamtx not using TURN (for example if the TURN server is on the same network as mediamtx).  To allow this you can configure the TURN server to be client only:
+In some cases you may want the browser to connect using TURN servers but have mediamtx not using TURN (for example if the TURN server is on the same network as mediamtx). To allow this you can configure the TURN server to be client only:
 
 ```yml
 webrtcICEServers2:
-- url: turn:host:port
-  username: user
-  password: password
-  clientOnly: true
+  - url: turn:host:port
+    username: user
+    password: password
+    clientOnly: true
 ```
 
 #### Supported browsers
@@ -2364,8 +2377,8 @@ The server can ingest and broadcast with WebRTC a wide variety of video and audi
 
 In particular, reading and publishing H265 tracks with WebRTC was not possible until some time ago due to lack of browser support. The situation improved recently and can be described as following:
 
-* Safari on iOS and macOS fully supports publishing and reading H265 tracks
-* Chrome on Windows supports publishing and reading H265 tracks when a GPU is present and when the browser is launched with the following flags:
+- Safari on iOS and macOS fully supports publishing and reading H265 tracks
+- Chrome on Windows supports publishing and reading H265 tracks when a GPU is present and when the browser is launched with the following flags:
 
   ```
   chrome.exe --enable-features=PlatformHEVCEncoderSupport,WebRtcAllowH265Receive,WebRtcAllowH265Send --force-fieldtrials=WebRTC-Video-H26xPacketBuffer/Enabled
@@ -2407,9 +2420,9 @@ ffmpeg -i rtsp://original-source \
 
 The RTSP protocol supports different underlying transport protocols, that are chosen by clients during the handshake with the server:
 
-* UDP: the most performant, but doesn't work when there's a NAT/firewall between server and clients. It doesn't support encryption.
-* UDP-multicast: allows to save bandwidth when clients are all in the same LAN, by sending packets once to a fixed multicast IP. It doesn't support encryption.
-* TCP: the most versatile, does support encryption.
+- UDP: the most performant, but doesn't work when there's a NAT/firewall between server and clients. It doesn't support encryption.
+- UDP-multicast: allows to save bandwidth when clients are all in the same LAN, by sending packets once to a fixed multicast IP. It doesn't support encryption.
+- TCP: the most versatile, does support encryption.
 
 The default transport protocol is UDP. To change the transport protocol, you have to tune the configuration of your client of choice.
 
@@ -2441,13 +2454,13 @@ rtsps://localhost:8322/mystream
 
 In some scenarios, when publishing or reading from the server with RTSP, frames can get corrupted. This can be caused by multiple reasons:
 
-* the write queue of the server is too small and can't keep up with the stream throughput. A solution consists in increasing its size:
+- the write queue of the server is too small and can't keep up with the stream throughput. A solution consists in increasing its size:
 
   ```yml
   writeQueueSize: 1024
   ```
 
-* The stream throughput is too big and the stream can't be transmitted correctly with the UDP transport protocol. UDP is more performant, faster and more efficient than TCP, but doesn't have a retransmission mechanism, that is needed in case of streams that need a large bandwidth. A solution consists in switching to TCP:
+- The stream throughput is too big and the stream can't be transmitted correctly with the UDP transport protocol. UDP is more performant, faster and more efficient than TCP, but doesn't have a retransmission mechanism, that is needed in case of streams that need a large bandwidth. A solution consists in switching to TCP:
 
   ```yml
   rtspTransports: [tcp]
@@ -2460,9 +2473,9 @@ In some scenarios, when publishing or reading from the server with RTSP, frames 
     test:
       source: rtsp://..
       rtspTransport: tcp
-   ```
+  ```
 
-* The stream throughput is too big to be handled by the network between server and readers. Upgrade the network or decrease the stream bitrate by re-encoding it.
+- The stream throughput is too big to be handled by the network between server and readers. Upgrade the network or decrease the stream bitrate by re-encoding it.
 
 ### RTMP-specific features
 
@@ -2603,43 +2616,49 @@ The official Docker image can be recompiled by following these steps:
 
 All the code in this repository is released under the [MIT License](LICENSE). Compiled binaries include some third-party dependencies:
 
-* all the Golang-based dependencies listed into the [go.mod file](go.mod), which are all released under either the MIT license, BSD 3-Clause license or Apache License 2.0.
-* hls.js, released under the [Apache License 2.0](https://github.com/video-dev/hls.js/blob/master/LICENSE).
-* mediamtx-rpicamera, which is released under the same license of _MediaMTX_ but includes some [third-party dependencies](https://github.com/bluenviron/mediamtx-rpicamera?tab=readme-ov-file#license).
+- all the Golang-based dependencies listed into the [go.mod file](go.mod), which are all released under either the MIT license, BSD 3-Clause license or Apache License 2.0.
+- hls.js, released under the [Apache License 2.0](https://github.com/video-dev/hls.js/blob/master/LICENSE).
+- mediamtx-rpicamera, which is released under the same license of _MediaMTX_ but includes some [third-party dependencies](https://github.com/bluenviron/mediamtx-rpicamera?tab=readme-ov-file#license).
 
 ## Specifications
 
-|name|area|
-|----|----|
-|[RTSP / RTP / RTCP specifications](https://github.com/bluenviron/gortsplib#specifications)|RTSP|
-|[HLS specifications](https://github.com/bluenviron/gohlslib#specifications)|HLS|
-|[Action Message Format - AMF 0](https://veovera.org/docs/legacy/amf0-file-format-spec.pdf)|RTMP|
-|[FLV](https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf)|RTMP|
-|[RTMP](https://veovera.org/docs/legacy/rtmp-v1-0-spec.pdf)|RTMP|
-|[Enhanced RTMP v2](https://veovera.org/docs/enhanced/enhanced-rtmp-v2.pdf)|RTMP|
-|[WebRTC: Real-Time Communication in Browsers](https://www.w3.org/TR/webrtc/)|WebRTC|
-|[RFC8835, Transports for WebRTC](https://datatracker.ietf.org/doc/html/rfc8835)|WebRTC|
-|[RFC7742, WebRTC Video Processing and Codec Requirements](https://datatracker.ietf.org/doc/html/rfc7742)|WebRTC|
-|[RFC7847, WebRTC Audio Codec and Processing Requirements](https://datatracker.ietf.org/doc/html/rfc7874)|WebRTC|
-|[RFC7875, Additional WebRTC Audio Codecs for Interoperability](https://datatracker.ietf.org/doc/html/rfc7875)|WebRTC|
-|[H.265 Profile for WebRTC](https://datatracker.ietf.org/doc/draft-ietf-avtcore-hevc-webrtc/)|WebRTC|
-|[WebRTC HTTP Ingestion Protocol (WHIP)](https://datatracker.ietf.org/doc/draft-ietf-wish-whip/)|WebRTC|
-|[WebRTC HTTP Egress Protocol (WHEP)](https://datatracker.ietf.org/doc/draft-murillo-whep/)|WebRTC|
-|[The SRT Protocol](https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html)|SRT|
-|[Codec specifications](https://github.com/bluenviron/mediacommon#specifications)|codecs|
-|[Golang project layout](https://github.com/golang-standards/project-layout)|project layout|
+| name                                                                                                          | area           |
+| ------------------------------------------------------------------------------------------------------------- | -------------- |
+| [RTSP / RTP / RTCP specifications](https://github.com/bluenviron/gortsplib#specifications)                    | RTSP           |
+| [HLS specifications](https://github.com/bluenviron/gohlslib#specifications)                                   | HLS            |
+| [Action Message Format - AMF 0](https://veovera.org/docs/legacy/amf0-file-format-spec.pdf)                    | RTMP           |
+| [FLV](https://veovera.org/docs/legacy/video-file-format-v10-1-spec.pdf)                                       | RTMP           |
+| [RTMP](https://veovera.org/docs/legacy/rtmp-v1-0-spec.pdf)                                                    | RTMP           |
+| [Enhanced RTMP v2](https://veovera.org/docs/enhanced/enhanced-rtmp-v2.pdf)                                    | RTMP           |
+| [WebRTC: Real-Time Communication in Browsers](https://www.w3.org/TR/webrtc/)                                  | WebRTC         |
+| [RFC8835, Transports for WebRTC](https://datatracker.ietf.org/doc/html/rfc8835)                               | WebRTC         |
+| [RFC7742, WebRTC Video Processing and Codec Requirements](https://datatracker.ietf.org/doc/html/rfc7742)      | WebRTC         |
+| [RFC7847, WebRTC Audio Codec and Processing Requirements](https://datatracker.ietf.org/doc/html/rfc7874)      | WebRTC         |
+| [RFC7875, Additional WebRTC Audio Codecs for Interoperability](https://datatracker.ietf.org/doc/html/rfc7875) | WebRTC         |
+| [H.265 Profile for WebRTC](https://datatracker.ietf.org/doc/draft-ietf-avtcore-hevc-webrtc/)                  | WebRTC         |
+| [WebRTC HTTP Ingestion Protocol (WHIP)](https://datatracker.ietf.org/doc/draft-ietf-wish-whip/)               | WebRTC         |
+| [WebRTC HTTP Egress Protocol (WHEP)](https://datatracker.ietf.org/doc/draft-murillo-whep/)                    | WebRTC         |
+| [The SRT Protocol](https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html)                             | SRT            |
+| [Codec specifications](https://github.com/bluenviron/mediacommon#specifications)                              | codecs         |
+| [Golang project layout](https://github.com/golang-standards/project-layout)                                   | project layout |
 
 ## Related projects
 
-* [gortsplib (RTSP library used internally)](https://github.com/bluenviron/gortsplib)
-* [gohlslib (HLS library used internally)](https://github.com/bluenviron/gohlslib)
-* [mediacommon (codecs and formats library used internally)](https://github.com/bluenviron/mediacommon)
-* [mediamtx-rpicamera (Raspberry Pi Camera component)](https://github.com/bluenviron/mediamtx-rpicamera)
-* [datarhei/gosrt (SRT library used internally)](https://github.com/datarhei/gosrt)
-* [pion/webrtc (WebRTC library used internally)](https://github.com/pion/webrtc)
-* [pion/sdp (SDP library used internally)](https://github.com/pion/sdp)
-* [pion/rtp (RTP library used internally)](https://github.com/pion/rtp)
-* [pion/rtcp (RTCP library used internally)](https://github.com/pion/rtcp)
-* [go-astits (MPEG-TS library used internally)](https://github.com/asticode/go-astits)
-* [go-mp4 (MP4 library used internally)](https://github.com/abema/go-mp4)
-* [hls.js (browser-side HLS library used internally)](https://github.com/video-dev/hls.js)
+- [gortsplib (RTSP library used internally)](https://github.com/bluenviron/gortsplib)
+- [gohlslib (HLS library used internally)](https://github.com/bluenviron/gohlslib)
+- [mediacommon (codecs and formats library used internally)](https://github.com/bluenviron/mediacommon)
+- [mediamtx-rpicamera (Raspberry Pi Camera component)](https://github.com/bluenviron/mediamtx-rpicamera)
+- [datarhei/gosrt (SRT library used internally)](https://github.com/datarhei/gosrt)
+- [pion/webrtc (WebRTC library used internally)](https://github.com/pion/webrtc)
+- [pion/sdp (SDP library used internally)](https://github.com/pion/sdp)
+- [pion/rtp (RTP library used internally)](https://github.com/pion/rtp)
+- [pion/rtcp (RTCP library used internally)](https://github.com/pion/rtcp)
+- [go-astits (MPEG-TS library used internally)](https://github.com/asticode/go-astits)
+- [go-mp4 (MP4 library used internally)](https://github.com/abema/go-mp4)
+- [hls.js (browser-side HLS library used internally)](https://github.com/video-dev/hls.js)
+
+## Transcode dependence
+
+apt-get install gcc
+apt-get install pkg-config
+apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
