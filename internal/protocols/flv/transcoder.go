@@ -10,7 +10,6 @@ package flv
 import "C"
 import (
 	"fmt"
-	"log"
 	"time"
 	"unsafe"
 
@@ -238,7 +237,6 @@ func (t *AudioTranscoder) initSwr(decCtx *C.AVCodecContext, encCtx *C.AVCodecCon
 	}
 
 	if res := C.swr_init(t.swrCtx); res < 0 {
-		log.Printf("init swr failed res:%d\n", res)
 		return fmt.Errorf("init swr failed")
 	}
 

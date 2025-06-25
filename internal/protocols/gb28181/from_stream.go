@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/g711"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
@@ -222,9 +223,39 @@ func setupAudio(
 			func(u unit.Unit) error {
 				tunit := u.(*unit.G711)
 
+				if tunit.Samples == nil {
+					return nil
+				}
+
 				ts := timestampToDuration(tunit.PTS, g711Format.ClockRate())
 				ts = ts / time.Millisecond
-				conn.WriteAudio(tunit.Samples, uint64(ts), uint64(ts))
+
+				if conn.GetPayloadType() != g711Format.PayloadTyp {
+					var lpcm []byte
+					if g711Format.MULaw {
+						var mu g711.Mulaw
+						mu.Unmarshal(tunit.Samples)
+						lpcm = mu
+
+						al := g711.Alaw(lpcm)
+						samples, err := al.Marshal()
+						if err != nil {
+							conn.WriteAudio(samples, uint64(ts), uint64(ts))
+						}
+					} else {
+						var al g711.Alaw
+						al.Unmarshal(tunit.Samples)
+						lpcm = al
+
+						mu := g711.Mulaw(lpcm)
+						samples, err := mu.Marshal()
+						if err != nil {
+							conn.WriteAudio(samples, uint64(ts), uint64(ts))
+						}
+					}
+				} else {
+					conn.WriteAudio(tunit.Samples, uint64(ts), uint64(ts))
+				}
 
 				return nil
 			})

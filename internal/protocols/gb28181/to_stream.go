@@ -56,7 +56,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H264{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: int64(pts) * 90,
+						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
 					},
 					AU: dec,
 				})
@@ -85,7 +85,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H265{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: int64(pts) * 90,
+						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
 					},
 					AU: dec,
 				})
@@ -143,7 +143,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: int64(pts),
+						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
 					},
 					Samples: data,
 				})
@@ -166,7 +166,7 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 				(*stream).WriteUnit(medi, medi.Formats[0], &unit.G711{
 					Base: unit.Base{
 						NTP: time.Now(),
-						PTS: int64(pts),
+						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
 					},
 					Samples: data,
 				})

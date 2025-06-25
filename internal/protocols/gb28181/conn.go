@@ -174,6 +174,10 @@ func (c *Conn) SetPayloadType(pl uint8) {
 	c.rtpPacketizer.PayloadType = pl
 }
 
+func (c *Conn) GetPayloadType() uint8 {
+	return c.payloadType
+}
+
 func (c *Conn) Port() int {
 	return c.port
 }
@@ -254,11 +258,11 @@ func (c *Conn) StartRead() {
 
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
 	if c.timebase == 0 {
-		// c.timebase = int64(pts)
-		c.timebase = time.Now().UnixMilli()
+		c.timebase = int64(pts)
+		// c.timebase = time.Now().UnixMilli()
 	}
-	// ts := time.Duration(pts - uint64(c.timebase))
-	ts := time.Duration(time.Now().UnixMilli() - c.timebase)
+	ts := time.Duration(pts - uint64(c.timebase))
+	// ts := time.Duration(time.Now().UnixMilli() - c.timebase)
 
 	if !c.startRead.Load() {
 		f := &PsFrame{

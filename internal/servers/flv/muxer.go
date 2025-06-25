@@ -63,7 +63,8 @@ func (m *muxer) run() {
 
 	err := m.runInner()
 	if err != nil {
-		m.flvConn.Close()
+		// m.flvConn.Close()
+		m.Log(logger.Info, "flv conn close")
 	}
 
 	m.Log(logger.Info, "run exit")
