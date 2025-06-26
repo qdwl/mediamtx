@@ -43,8 +43,13 @@ func (m *muxer) initialize() {
 	go m.run()
 }
 
+func (m *muxer) Context() context.Context {
+	return m.ctx
+}
+
 func (m *muxer) Close() {
 	m.Log(logger.Info, "close muxer")
+	m.flvConn.Close()
 	m.ctxCancel()
 }
 
@@ -63,7 +68,7 @@ func (m *muxer) run() {
 
 	err := m.runInner()
 	if err != nil {
-		// m.flvConn.Close()
+		m.flvConn.Close()
 		m.Log(logger.Info, "flv conn close")
 	}
 

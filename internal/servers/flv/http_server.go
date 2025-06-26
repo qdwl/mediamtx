@@ -130,7 +130,7 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-		case <-flvConn.Done:
+		case <-muxer.Context().Done():
 			s.Log(logger.Info, "flv conn closed")
 			return
 

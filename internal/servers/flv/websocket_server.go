@@ -141,17 +141,13 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 				s.Log(logger.Error, "websocket conn send failed %v", err)
 				return
 			}
-		case <-flvConn.Done:
-			s.Log(logger.Info, "flv conn closed")
+		case <-muxer.Context().Done():
+			s.Log(logger.Info, "muxer done notify")
 			return
 
 		case <-r.Context().Done():
 			s.Log(logger.Info, "websocket conn done")
 			return
-
-			// case err := <-readerErr:
-			// 	s.Log(logger.Info, "websocket conn error %v", err)
-			// 	return
 		}
 	}
 }

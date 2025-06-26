@@ -1,25 +1,30 @@
 package flv
 
 import (
+	"context"
 	"errors"
 )
 
 type Conn struct {
 	FlvHeader chan *Header
 	FlvTags   chan *Tag
-	Done      chan struct{}
+	ctx       context.Context
+	ctxCancel func()
 }
 
 func NewConn() *Conn {
+	ctx, ctxCancel := context.WithCancel(context.Background())
+
 	return &Conn{
 		FlvHeader: make(chan *Header),
 		FlvTags:   make(chan *Tag),
-		Done:      make(chan struct{}),
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
 	}
 }
 
 func (c *Conn) Close() {
-	close(c.Done)
+	c.ctxCancel()
 }
 
 func (c *Conn) Write(data TagData) error {
@@ -35,7 +40,7 @@ func (c *Conn) WriteHeader(header *Header) error {
 	select {
 	case c.FlvHeader <- header:
 		return nil
-	case <-c.Done:
+	case <-c.ctx.Done():
 		return errors.New("terminated")
 	}
 }
@@ -44,7 +49,7 @@ func (c *Conn) WriteTag(tag *Tag) error {
 	select {
 	case c.FlvTags <- tag:
 		return nil
-	case <-c.Done:
+	case <-c.ctx.Done():
 		return errors.New("terminated")
 	}
 }
