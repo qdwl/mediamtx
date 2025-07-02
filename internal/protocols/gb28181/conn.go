@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -142,9 +143,12 @@ func NewConn(
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
 	} else if protocol == TcpClient {
 		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
+		log.Println("TcpClient")
 	} else if protocol == TcpServer {
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
+		log.Println("TcpServer")
 	}
+	log.Printf("protocol:%d, localAddr:%s, remoteAddr:%s, transport:%+v\n", protocol, localAddr, remoteAddr, c.transport)
 
 	c.muxer.OnPacket = c.OnMuxPacket
 	c.demuxer.OnPacket = c.OnDemuxPacket
@@ -161,7 +165,7 @@ func (c *Conn) Close() {
 }
 
 func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
-	if c.protocol == TcpServer {
+	if c.protocol == TcpClient {
 		localAddr := fmt.Sprintf(":%d", c.port)
 		remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 

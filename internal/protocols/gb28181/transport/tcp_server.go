@@ -3,6 +3,7 @@ package transport
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"time"
 
@@ -50,12 +51,14 @@ func NewTcpServer(
 }
 
 func (s *TcpServer) Close() {
+	log.Printf("close tcp server, s.conn:%p\n", s.conn)
 	s.ln.Close()
 	s.conn.Close()
 	<-s.done
 }
 
 func (s *TcpServer) runReader() {
+	defer log.Println("TcpServer exit")
 	defer close(s.done)
 	tmp, err := s.ln.Accept()
 	if err != nil {
@@ -84,6 +87,7 @@ func (s *TcpServer) runReader() {
 		buf := make([]byte, length)
 		_, err = io.ReadFull(conn, buf)
 		if err != nil {
+			log.Printf("tcp server read err %+v\n", err)
 			return
 		}
 
