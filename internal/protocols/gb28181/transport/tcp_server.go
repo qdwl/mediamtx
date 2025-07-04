@@ -53,7 +53,9 @@ func NewTcpServer(
 func (s *TcpServer) Close() {
 	log.Printf("close tcp server, s.conn:%p\n", s.conn)
 	s.ln.Close()
-	s.conn.Close()
+	if s.conn != nil {
+		s.conn.Close()
+	}
 	<-s.done
 }
 

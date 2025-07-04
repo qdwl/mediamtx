@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -326,6 +327,28 @@ func (c *Conn) run() {
 	if c.transport != nil {
 		c.transport.Close()
 	}
+}
+
+func appendToBinaryFile(filename string, data []byte) error {
+	// 使用os.OpenFile打开文件，如果不存在则创建，追加模式，只写模式
+	// 参数说明：
+	// - O_CREATE: 如果文件不存在则创建
+	// - O_APPEND: 以追加模式打开
+	// - O_WRONLY: 只写模式
+	// 0644是文件权限(rw-r--r--)
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("无法打开文件: %v", err)
+	}
+	defer file.Close()
+
+	// 写入数据
+	_, err = file.Write(data)
+	if err != nil {
+		return fmt.Errorf("写入文件失败: %v", err)
+	}
+
+	return nil
 }
 
 func (c *Conn) ProcessRtpPacket(pkt *rtp.Packet) {
