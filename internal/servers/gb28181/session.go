@@ -45,10 +45,18 @@ func (s *session) initialize() {
 	s.ctxCancel = ctxCancel
 	s.created = time.Now()
 	s.uuid = uuid.New()
-	s.conn = gb28181.NewConn(ctx, s.portPair.RTPPort, s.req.remoteIp, s.req.remotePort, s.req.transport, s.req.payloadType)
+	s.conn = gb28181.NewConn(
+		ctx,
+		s.portPair.RTPPort,
+		s.req.remoteIp,
+		s.req.remotePort,
+		s.req.transport,
+		s.req.payloadType,
+		s.req.liveStream,
+	)
 
-	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d",
-		s.req.pathName, s.portPair.RTPPort, s.req.transport, s.req.remoteIp, s.req.remotePort)
+	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d, liveStream:%t",
+		s.req.pathName, s.portPair.RTPPort, s.req.transport, s.req.remoteIp, s.req.remotePort, s.req.liveStream)
 
 	s.wg.Add(1)
 	go s.run()
@@ -117,6 +125,7 @@ func (s *session) runPublish() error {
 
 	_, err = s.conn.ProbeTracks()
 	if err != nil {
+		s.Log(logger.Error, "probe tracks failed %s", err.Error())
 		return err
 	}
 

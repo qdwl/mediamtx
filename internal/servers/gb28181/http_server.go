@@ -85,6 +85,7 @@ func (s *httpServer) onCreateStream(ctx *gin.Context) {
 		remotePort:  req.RemotePort,
 		direction:   strings.ToLower(req.Direction),
 		transport:   req.Transport,
+		liveStream:  req.LiveStream,
 	})
 	if res.err != nil {
 		if res.errStatusCode != 0 {

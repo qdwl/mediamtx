@@ -89,6 +89,7 @@ type Conn struct {
 	buf                 []byte
 	timebase            int64
 	payloadType         uint8
+	liveStream          bool
 
 	vcid uint8
 	acid uint8
@@ -111,6 +112,7 @@ func NewConn(
 	remotePort int,
 	protocol int,
 	payloadType uint8,
+	liveStream bool,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parentCtx)
 
@@ -126,10 +128,10 @@ func NewConn(
 		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
 		buf:            make([]byte, 1500),
 		payloadType:    payloadType,
-		// timebase:       time.Now().UnixMilli(),
-		frameCache: make([]*PsFrame, 0),
-		packetChan: make(chan mpeg2.Display),
-		done:       make(chan struct{}),
+		liveStream:     liveStream,
+		frameCache:     make([]*PsFrame, 0),
+		packetChan:     make(chan mpeg2.Display),
+		done:           make(chan struct{}),
 	}
 
 	c.rtpPacketizer = &RtpPacketizer{
@@ -199,6 +201,8 @@ func (c *Conn) Tracks() []*mpegps.Track {
 }
 
 func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
+	timeout := time.After(10 * time.Second)
+
 	for {
 		req := trackProbeReq{
 			resChan: make(chan trackProbeRes),
@@ -217,7 +221,7 @@ func (c *Conn) ProbeTracks() (tracks []*mpegps.Track, err error) {
 				return nil, errors.New("GB28181 connection closed")
 			}
 
-		case <-time.After(10000 * time.Millisecond):
+		case <-timeout:
 			return nil, errors.New("probe tracks timeout")
 
 		case <-c.ctx.Done():
@@ -263,11 +267,19 @@ func (c *Conn) StartRead() {
 
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
 	if c.timebase == 0 {
-		// c.timebase = int64(pts)
-		c.timebase = time.Now().UnixMilli()
+		if c.liveStream {
+			c.timebase = int64(pts)
+		} else {
+			c.timebase = time.Now().UnixMilli()
+		}
 	}
-	// ts := time.Duration(pts - uint64(c.timebase))
-	ts := time.Duration(time.Now().UnixMilli() - c.timebase)
+
+	var ts time.Duration
+	if c.liveStream {
+		ts = time.Duration(pts - uint64(c.timebase))
+	} else {
+		ts = time.Duration(time.Now().UnixMilli() - c.timebase)
+	}
 
 	if !c.startRead.Load() {
 		f := &PsFrame{
