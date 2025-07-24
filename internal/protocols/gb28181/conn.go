@@ -417,7 +417,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamId:   es.Elementary_stream_id,
 						StreamType: uint8(mpeg2.PS_STREAM_G711A),
 						Codec:      &mpegps.CodecG711A{},
-						Complete:   true,
+						Complete:   false,
 						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_G711A)] = track
@@ -429,7 +429,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						StreamId:   es.Elementary_stream_id,
 						StreamType: uint8(mpeg2.PS_STREAM_G711U),
 						Codec:      &mpegps.CodecG711U{},
-						Complete:   true,
+						Complete:   false,
 						Updated:    time.Now(),
 					}
 					c.tracks[uint8(mpeg2.PS_STREAM_G711U)] = track
@@ -439,7 +439,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 		}
 	case *mpeg2.PesPacket:
 		count := 0
-		for _, track := range c.tracks {
+		for key, track := range c.tracks {
 			if track.StreamId == value.Stream_id {
 				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_AAC {
 					if track, ok := c.tracks[uint8(mpeg2.PS_STREAM_AAC)]; ok {
@@ -514,11 +514,20 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 						}
 					}
 				}
+				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_G711A {
+					track.Complete = true
+				}
+				if mpeg2.PS_STREAM_TYPE(track.StreamType) == mpeg2.PS_STREAM_G711U {
+					track.Complete = true
+				}
 				track.Updated = time.Now()
 			}
 
-			if track.Complete || track.Updated.Add(time.Second).Before(time.Now()) {
+			if track.Complete {
 				count++
+			} else if track.Updated.Add(time.Second).Before(time.Now()) {
+				delete(c.tracks, key)
+				fmt.Printf("delete expired and uncomplete track %v\n", track)
 			}
 		}
 		if count == len(c.tracks) && count > 0 {
