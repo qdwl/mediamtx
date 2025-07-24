@@ -52,7 +52,7 @@ func (s *session) initialize() {
 		s.req.remotePort,
 		s.req.transport,
 		s.req.payloadType,
-		s.req.liveStream,
+		false, // 先关闭读取PS流中的时间戳
 	)
 
 	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d, liveStream:%t",
