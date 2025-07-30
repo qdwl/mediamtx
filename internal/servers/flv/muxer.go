@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
@@ -24,7 +25,7 @@ type muxer struct {
 	pathManager serverPathManager
 	parent      *Server
 	flvConn     *flv.Conn
-	transcoder  flv.AudioTranscoder
+	transcoder  codec.AudioTranscoder
 
 	ctx       context.Context
 	ctxCancel func()

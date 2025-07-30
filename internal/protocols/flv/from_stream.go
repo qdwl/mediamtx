@@ -8,6 +8,7 @@ import (
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/unit"
@@ -177,7 +178,7 @@ func setupAudio(
 	str *stream.Stream,
 	reader stream.Reader,
 	w **Writer,
-	transcoder *AudioTranscoder,
+	transcoder *codec.AudioTranscoder,
 ) format.Format {
 
 	var audioFormatMPEG4Audio *format.MPEG4Audio
@@ -248,8 +249,8 @@ func setupAudio(
 
 				for _, pkt := range pkts {
 					err = (*w).WriteMPEG4Audio(
-						time.Duration(pkt.pts)*time.Millisecond,
-						pkt.buf,
+						time.Duration(pkt.PTS)*time.Millisecond,
+						pkt.Buf,
 					)
 					if err != nil {
 						return err
@@ -271,7 +272,7 @@ func FromStream(
 	str *stream.Stream,
 	reader stream.Reader,
 	conn *Conn,
-	transcoder *AudioTranscoder,
+	transcoder *codec.AudioTranscoder,
 ) error {
 	var w *Writer
 
