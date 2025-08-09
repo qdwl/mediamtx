@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -90,6 +89,7 @@ type Conn struct {
 	timebase            int64
 	payloadType         uint8
 	liveStream          bool
+	lastActiveTime      time.Time
 
 	vcid uint8
 	acid uint8
@@ -130,6 +130,7 @@ func NewConn(
 		payloadType:    payloadType,
 		liveStream:     liveStream,
 		frameCache:     make([]*PsFrame, 0),
+		lastActiveTime: time.Now(),
 		packetChan:     make(chan mpeg2.Display),
 		done:           make(chan struct{}),
 	}
@@ -164,7 +165,10 @@ func NewConn(
 
 func (c *Conn) Close() {
 	c.ctxCancel()
-	<-c.done
+}
+
+func (c *Conn) Done() chan struct{} {
+	return c.done
 }
 
 func (c *Conn) SetRemoteAddr(remoteIp string, remotePort int) {
@@ -313,6 +317,7 @@ func (c *Conn) run() {
 	defer close(c.done)
 
 	func() {
+		ticker := time.NewTicker(time.Second)
 		for {
 			select {
 			// case pkt := <-c.packetChan:
@@ -330,6 +335,13 @@ func (c *Conn) run() {
 				}
 				req.resChan <- res
 
+			case <-ticker.C:
+				now := time.Now()
+				if c.lastActiveTime.Add(10 * time.Second).Before(now) {
+					log.Printf("check gb28181 conn error\n")
+					return
+				}
+
 			case <-c.ctx.Done():
 				return
 			}
@@ -341,29 +353,30 @@ func (c *Conn) run() {
 	}
 }
 
-func appendToBinaryFile(filename string, data []byte) error {
-	// 使用os.OpenFile打开文件，如果不存在则创建，追加模式，只写模式
-	// 参数说明：
-	// - O_CREATE: 如果文件不存在则创建
-	// - O_APPEND: 以追加模式打开
-	// - O_WRONLY: 只写模式
-	// 0644是文件权限(rw-r--r--)
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("无法打开文件: %v", err)
-	}
-	defer file.Close()
+// func appendToBinaryFile(filename string, data []byte) error {
+// 	// 使用os.OpenFile打开文件，如果不存在则创建，追加模式，只写模式
+// 	// 参数说明：
+// 	// - O_CREATE: 如果文件不存在则创建
+// 	// - O_APPEND: 以追加模式打开
+// 	// - O_WRONLY: 只写模式
+// 	// 0644是文件权限(rw-r--r--)
+// 	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+// 	if err != nil {
+// 		return fmt.Errorf("无法打开文件: %v", err)
+// 	}
+// 	defer file.Close()
 
-	// 写入数据
-	_, err = file.Write(data)
-	if err != nil {
-		return fmt.Errorf("写入文件失败: %v", err)
-	}
+// 	// 写入数据
+// 	_, err = file.Write(data)
+// 	if err != nil {
+// 		return fmt.Errorf("写入文件失败: %v", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (c *Conn) ProcessRtpPacket(pkt *rtp.Packet) {
+	c.lastActiveTime = time.Now()
 	c.demuxer.Input(pkt.Payload)
 }
 
@@ -553,6 +566,7 @@ func (c *Conn) WriteAudio(frame []byte, pts uint64, dts uint64) {
 }
 
 func (c *Conn) write(buf []byte) error {
+	c.lastActiveTime = time.Now()
 	if c.transport != nil {
 		return c.transport.Write(buf)
 	}

@@ -149,6 +149,9 @@ func (s *session) runPublish() error {
 	select {
 	case <-s.ctx.Done():
 		return nil
+
+	case <-s.conn.Done():
+		return nil
 	}
 }
 
@@ -198,6 +201,9 @@ func (s *session) runRead() error {
 
 	case err := <-stream.ReaderError(s):
 		return err
+
+		// case <-s.conn.Done():
+		// 	return nil
 	}
 }
 
