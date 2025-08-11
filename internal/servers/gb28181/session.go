@@ -28,14 +28,12 @@ type session struct {
 	pathManager    serverPathManager
 	parent         *Server
 
-	ctx        context.Context
-	ctxCancel  func()
-	created    time.Time
-	uuid       uuid.UUID
-	answerSent bool
-	conn       *gb28181.Conn
-	timebase   int64
-	path       defs.Path
+	ctx       context.Context
+	ctxCancel func()
+	created   time.Time
+	uuid      uuid.UUID
+	conn      *gb28181.Conn
+	path      defs.Path
 }
 
 func (s *session) initialize() {
@@ -52,7 +50,7 @@ func (s *session) initialize() {
 		s.req.remotePort,
 		s.req.transport,
 		s.req.payloadType,
-		false, // 先关闭读取PS流中的时间戳
+		s.req.liveStream, // 先关闭读取PS流中的时间戳
 	)
 
 	s.Log(logger.Info, "gb28181 session created by %s, port:%d, transport:%d, remoteIp:%s, remotePort:%d, liveStream:%t",
@@ -90,11 +88,12 @@ func (s *session) run() {
 }
 
 func (s *session) runInner() error {
-	if s.req.direction == "recvonly" {
+	switch s.req.direction {
+	case "recvonly":
 		return s.runPublish()
-	} else if s.req.direction == "sendonly" {
+	case "sendonly":
 		return s.runRead()
-	} else {
+	default:
 		return fmt.Errorf("unsupport direction")
 	}
 }
@@ -156,27 +155,13 @@ func (s *session) runPublish() error {
 }
 
 func (s *session) runRead() error {
-	var path defs.Path
-	var stream *stream.Stream
-	var err error
-	var count int = 0
-	for {
-		<-time.After(100 * time.Millisecond)
-		path, stream, err = s.pathManager.AddReader(defs.PathAddReaderReq{
-			Author: s,
-			AccessRequest: defs.PathAccessRequest{
-				Name:     s.req.pathName,
-				SkipAuth: true,
-			},
-		})
-		count++
-		if err == nil || count > 100 {
-			break
-		} else {
-			s.Log(logger.Debug, "find stream failed, %v", err)
-			continue
-		}
-	}
+	path, stream, err := s.pathManager.AddReader(defs.PathAddReaderReq{
+		Author: s,
+		AccessRequest: defs.PathAccessRequest{
+			Name:     s.req.pathName,
+			SkipAuth: true,
+		},
+	})
 	if err != nil {
 		return err
 	}

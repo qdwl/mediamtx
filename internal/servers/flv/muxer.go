@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
-	"github.com/bluenviron/mediamtx/internal/stream"
 )
 
 var errNoSupportedCodecs = errors.New(
@@ -83,27 +81,13 @@ func (m *muxer) run() {
 }
 
 func (m *muxer) runInner() error {
-	var path defs.Path
-	var stream *stream.Stream
-	var err error
-	var count int = 0
-	for {
-		<-time.After(100 * time.Millisecond)
-		path, stream, err = m.pathManager.AddReader(defs.PathAddReaderReq{
-			Author: m,
-			AccessRequest: defs.PathAccessRequest{
-				Name:     m.pathName,
-				SkipAuth: true,
-			},
-		})
-		count++
-		if err == nil || count > 100 {
-			break
-		} else {
-			m.Log(logger.Debug, "find stream failed, %v", err)
-			continue
-		}
-	}
+	path, stream, err := m.pathManager.AddReader(defs.PathAddReaderReq{
+		Author: m,
+		AccessRequest: defs.PathAccessRequest{
+			Name:     m.pathName,
+			SkipAuth: true,
+		},
+	})
 	if err != nil {
 		return err
 	}

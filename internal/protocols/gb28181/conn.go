@@ -143,14 +143,13 @@ func NewConn(
 	localAddr := fmt.Sprintf(":%d", port)
 	remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
-	if protocol == UdpSocket {
+	switch protocol {
+	case UdpSocket:
 		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
-	} else if protocol == TcpClient {
+	case TcpClient:
 		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
-		log.Println("TcpClient")
-	} else if protocol == TcpServer {
+	case TcpServer:
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
-		log.Println("TcpServer")
 	}
 	log.Printf("protocol:%d, localAddr:%s, remoteAddr:%s, transport:%+v\n", protocol, localAddr, remoteAddr, c.transport)
 
