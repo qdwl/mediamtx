@@ -9,7 +9,7 @@
 # Verbosity of the program; available values are "error", "warn", "info", "debug".
 logLevel: info
 # Destinations of log messages; available values are "stdout", "file" and "syslog".
-logDestinations: [stdout]
+logDestinations: [file]
 # If "file" is in logDestinations, this is the file which will receive the logs.
 logFile: mediamtx.log
 # If "syslog" is in logDestinations, use prefix for logs.
@@ -805,8 +805,8 @@ paths:
   # Settings under path "all_others" are applied to all paths that
   # do not match another entry.
   all_others:
-    runOnDemand: curl http://10.129.126.165:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onDemand
-    runOnUnDemand: curl http://10.129.126.165:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onUnDemand
+    runOnDemand: curl http://127.0.0.1:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onDemand
+    runOnUnDemand: curl http://127.0.0.1:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onUnDemand
     runOnDemandRestart: no
     runOnDemandStartTimeout: 15s
     runOnDemandCloseAfter: 15s
