@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -101,21 +102,22 @@ func (c *TcpClient) runReader() {
 }
 
 func (c *TcpClient) Write(buf []byte) error {
-	if c.conn != nil {
-		c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
-
-		length := len(buf)
-		lengthBytes := []byte{byte(length >> 8), byte(length & 0xFF)}
-		_, err := c.conn.Write(lengthBytes)
-		if err != nil {
-			return err
-		}
-
-		_, err = c.conn.Write(buf)
-		if err != nil {
-			return err
-		}
+	if c.conn == nil {
+		return errors.New("connection is nil")
 	}
 
-	return nil
+	// 设置超时（可选）
+	c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+
+	// 大端序写入长度前缀（2字节）
+	length := len(buf)
+	if length > 0xFFFF {
+		return errors.New("data too large")
+	}
+	lengthBytes := []byte{byte(length >> 8), byte(length & 0xFF)}
+
+	// 合并写入（减少系统调用）
+	data := append(lengthBytes, buf...)
+	_, err := c.conn.Write(data) // 或 io.Copy
+	return err
 }
