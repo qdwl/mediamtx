@@ -22,6 +22,7 @@ type muxer struct {
 	pathName    string
 	pathManager serverPathManager
 	parent      *Server
+	query       string
 	flvConn     *flv.Conn
 	transcoder  codec.AudioTranscoder
 
@@ -85,6 +86,7 @@ func (m *muxer) runInner() error {
 		Author: m,
 		AccessRequest: defs.PathAccessRequest{
 			Name:     m.pathName,
+			Query:    m.query,
 			SkipAuth: true,
 		},
 	})

@@ -94,6 +94,7 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 	muxer, err := s.parent.newMuxer(newMuxerReq{
 		remoteAddr: r.RemoteAddr,
 		path:       path,
+		query:      r.URL.RawQuery,
 		flvConn:    flvConn,
 	})
 	if err != nil {

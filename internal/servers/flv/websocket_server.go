@@ -89,6 +89,7 @@ func (s *websocketServer) handleConn(c *websocket.Conn) {
 	muxer, err := s.parent.newMuxer(newMuxerReq{
 		remoteAddr: r.RemoteAddr,
 		path:       path,
+		query:      r.URL.RawQuery,
 		flvConn:    flvConn,
 	})
 	if err != nil {

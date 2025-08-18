@@ -15,6 +15,7 @@ import (
 type newMuxerReq struct {
 	remoteAddr string
 	path       string
+	query      string
 	flvConn    *flv.Conn
 	res        chan newMuxerRes
 }
@@ -128,7 +129,7 @@ outer:
 	for {
 		select {
 		case req := <-s.chNewMuxer:
-			m, err := s.createMuxer(req.path, req.remoteAddr, req.flvConn)
+			m, err := s.createMuxer(req.path, req.query, req.remoteAddr, req.flvConn)
 			req.res <- newMuxerRes{
 				muxer: m,
 				err:   err,
@@ -148,7 +149,7 @@ outer:
 	s.websocketServer.close()
 }
 
-func (s *Server) createMuxer(path string, remoteAddr string, conn *flv.Conn) (*muxer, error) {
+func (s *Server) createMuxer(path string, query string, remoteAddr string, conn *flv.Conn) (*muxer, error) {
 	r := &muxer{
 		parentCtx:   s.ctx,
 		remoteAddr:  remoteAddr,
@@ -156,6 +157,7 @@ func (s *Server) createMuxer(path string, remoteAddr string, conn *flv.Conn) (*m
 		pathName:    path,
 		pathManager: s.PathManager,
 		parent:      s,
+		query:       query,
 		flvConn:     conn,
 	}
 	r.initialize()
