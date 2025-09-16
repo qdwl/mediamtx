@@ -11,7 +11,7 @@ logLevel: info
 # Destinations of log messages; available values are "stdout", "file" and "syslog".
 logDestinations: [file]
 # If "file" is in logDestinations, this is the file which will receive the logs.
-logFile: mediamtx.log
+logFile: logs/mediamtx.log
 # If "syslog" is in logDestinations, use prefix for logs.
 sysLogPrefix: mediamtx
 
@@ -144,7 +144,7 @@ authJWTInHTTPQuery: true
 # Enable controlling the server through the Control API.
 api: yes
 # Address of the Control API listener.
-apiAddress: :9997
+apiAddress: :26091
 # Enable TLS/HTTPS on the Control API server.
 apiEncryption: no
 # Path to the server key. This is needed only when encryption is yes.
@@ -246,9 +246,9 @@ rtspTransports: [udp, multicast, tcp]
 # Available values are "no", "strict", "optional".
 rtspEncryption: "no"
 # Address of the TCP/RTSP listener. This is needed only when encryption is "no" or "optional".
-rtspAddress: :8554
+rtspAddress: :26092
 # Address of the TCP/TLS/RTSPS listener. This is needed only when encryption is "strict" or "optional".
-rtspsAddress: :8322
+rtspsAddress: :26093
 # Address of the UDP/RTP listener. This is needed only when "udp" is in rtspTransports.
 rtpAddress: :28000
 # Address of the UDP/RTCP listener. This is needed only when "udp" is in rtspTransports.
@@ -276,12 +276,12 @@ rtspAuthMethods: [basic]
 # Enable publishing and reading streams with the RTMP protocol.
 rtmp: yes
 # Address of the RTMP listener. This is needed only when encryption is "no" or "optional".
-rtmpAddress: :1935
+rtmpAddress: :26095
 # Encrypt connections with TLS (RTMPS).
 # Available values are "no", "strict", "optional".
 rtmpEncryption: "no"
 # Address of the RTMPS listener. This is needed only when encryption is "strict" or "optional".
-rtmpsAddress: :1936
+rtmpsAddress: :26096
 # Path to the server key. This is needed only when encryption is "strict" or "optional".
 # This can be generated with:
 # openssl genrsa -out server.key 2048
@@ -296,7 +296,7 @@ rtmpServerCert: server.crt
 # Enable reading streams with the HLS protocol.
 hls: yes
 # Address of the HLS listener.
-hlsAddress: :8888
+hlsAddress: :26098
 # Enable TLS/HTTPS on the HLS server.
 # This is required for Low-Latency HLS.
 hlsEncryption: no
@@ -355,7 +355,7 @@ hlsMuxerCloseAfter: 60s
 # Enable publishing and reading streams with the WebRTC protocol.
 webrtc: yes
 # Address of the WebRTC HTTP listener.
-webrtcAddress: :8889
+webrtcAddress: :26099
 # Enable TLS/HTTPS on the WebRTC server.
 webrtcEncryption: no
 # Path to the server key.
@@ -378,7 +378,7 @@ webrtcLocalUDPAddress: ""
 # Address of a local TCP listener that will receive connections.
 # This is disabled by default since TCP is less efficient than UDP and
 # introduces a progressive delay when network is congested.
-webrtcLocalTCPAddress: :8189
+webrtcLocalTCPAddress: :26100
 # WebRTC clients need to know the IP of the server.
 # Gather IPs from interfaces and send them to clients.
 webrtcIPsFromInterfaces: yes
@@ -419,9 +419,9 @@ srtAddress: :8890
 # Enable publishing and reading streams with the FLV protocol.
 flv: yes
 # Address of the FLV HTTP listener.
-flvHttpAddress: :8891
+flvHttpAddress: :26101
 # Address of the FLV Websocket listener.
-flvWebsocketAddress: :8892
+flvWebsocketAddress: :26102
 # Enable TLS/HTTPS on the FLV server.
 flvEncryption: no
 # Path to the server key. This is needed only when encryption is yes.
@@ -445,7 +445,7 @@ flvTrustedProxies: []
 # Enables support for the GB28181 protocol.
 gb28181: yes
 # Address of the GB28181 listener.
-gb28181Address: :8893
+gb28181Address: :26103
 # Port of GB28181 RTP/RTCP minimum listeners.
 gb28181MinRTPPort: 20000
 # Port of GB28181 RTP/RTCP maximum listeners.
@@ -473,7 +473,7 @@ gb28181TrustedProxies: []
 # Enables support for the Push protocol.
 push: yes
 # Address of the Push listener.
-pushAddress: :8899
+pushAddress: :26104
 # Enable TLS/HTTPS on the Push server.
 pushEncryption: no
 # Path to the server key.
