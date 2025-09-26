@@ -1,0 +1,2 @@
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linuxarm64/lib -lavcodec -lavutil -lswscale -lswresample
+// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linuxarm64/include
