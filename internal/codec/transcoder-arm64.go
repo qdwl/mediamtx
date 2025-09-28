@@ -1,7 +1,9 @@
+//go:build linux && arm64
+
 package codec
 
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linux64/lib -lavcodec -lavutil -lswscale -lswresample
-// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linux64/include
+// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linux-arm64/lib -lavcodec -lavutil -lswscale -lswresample
+// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/../../thirdparty/ffmpeg-n6.1.2-linux-arm64/include
 // #include <libavcodec/avcodec.h>
 // #include <libavutil/imgutils.h>
 // #include <libswscale/swscale.h>
