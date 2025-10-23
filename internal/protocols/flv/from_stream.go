@@ -8,7 +8,6 @@ import (
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
-	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/bluenviron/mediamtx/internal/unit"
@@ -178,7 +177,6 @@ func setupAudio(
 	str *stream.Stream,
 	reader stream.Reader,
 	w **Writer,
-	transcoder *codec.AudioTranscoder,
 ) format.Format {
 
 	var audioFormatMPEG4Audio *format.MPEG4Audio
@@ -213,56 +211,6 @@ func setupAudio(
 		return audioFormatMPEG4Audio
 	}
 
-	var g711Format *format.G711
-	audioMedia = str.Desc.FindFormat(&g711Format)
-
-	if g711Format != nil {
-		audioFormatMPEG4Audio = &format.MPEG4Audio{
-			PayloadTyp:       96,
-			LATM:             false,
-			SizeLength:       13,
-			IndexLength:      3,
-			IndexDeltaLength: 3,
-			Config: &mpeg4audio.Config{
-				Type:         mpeg4audio.ObjectTypeAACLC,
-				SampleRate:   g711Format.SampleRate,
-				ChannelCount: 2,
-			},
-		}
-		err := transcoder.Initialize(g711Format, audioFormatMPEG4Audio)
-		if err != nil {
-			return nil
-		}
-
-		str.AddReader(
-			reader,
-			audioMedia,
-			g711Format,
-			func(u unit.Unit) error {
-				tunit := u.(*unit.G711)
-
-				pts := timestampToDuration(tunit.PTS, g711Format.ClockRate())
-				pkts, err := transcoder.Transcode(pts, tunit.Samples)
-				if err != nil {
-					return err
-				}
-
-				for _, pkt := range pkts {
-					err = (*w).WriteMPEG4Audio(
-						time.Duration(pkt.PTS)*time.Millisecond,
-						pkt.Buf,
-					)
-					if err != nil {
-						return err
-					}
-				}
-
-				return nil
-			})
-
-		return audioFormatMPEG4Audio
-	}
-
 	return nil
 
 }
@@ -272,7 +220,6 @@ func FromStream(
 	str *stream.Stream,
 	reader stream.Reader,
 	conn *Conn,
-	transcoder *codec.AudioTranscoder,
 ) error {
 	var w *Writer
 
@@ -286,7 +233,6 @@ func FromStream(
 		str,
 		reader,
 		&w,
-		transcoder,
 	)
 
 	if videoFormat == nil && audioFormat == nil {

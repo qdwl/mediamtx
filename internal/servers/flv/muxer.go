@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
@@ -24,7 +23,6 @@ type muxer struct {
 	parent      *Server
 	query       string
 	flvConn     *flv.Conn
-	transcoder  codec.AudioTranscoder
 
 	ctx       context.Context
 	ctxCancel func()
@@ -98,7 +96,7 @@ func (m *muxer) runInner() error {
 
 	defer m.path.RemoveReader(defs.PathRemoveReaderReq{Author: m})
 
-	err = flv.FromStream(stream, m, m.flvConn, &m.transcoder)
+	err = flv.FromStream(stream, m, m.flvConn)
 	if err != nil {
 		return err
 	}
@@ -107,7 +105,6 @@ func (m *muxer) runInner() error {
 		path.Name(), defs.FormatsInfo(stream.ReaderFormats(m)))
 
 	stream.StartReader(m)
-	defer m.transcoder.Close()
 	defer stream.RemoveReader(m)
 
 	select {
