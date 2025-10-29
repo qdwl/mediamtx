@@ -43,7 +43,17 @@ func (w *Writer) writeTracks() error {
 	if videoTrack, ok := w.VideoTrack.(*format.H264); ok {
 		// write decoder config only if SPS and PPS are available.
 		// if they're not available yet, they're sent later.
-		if sps, pps := videoTrack.SafeParams(); sps != nil && pps != nil {
+		var count = 0
+		var sps, pps []byte
+		for count < 30 {
+			sps, pps = videoTrack.SafeParams()
+			count++
+			if sps != nil && pps != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if sps != nil && pps != nil {
 			buf, _ := h264conf.Conf{
 				SPS: sps,
 				PPS: pps,
@@ -63,7 +73,17 @@ func (w *Writer) writeTracks() error {
 	}
 
 	if videoTrack, ok := w.VideoTrack.(*format.H265); ok {
-		vps, sps, pps := videoTrack.SafeParams()
+		var count = 0
+		var vps, sps, pps []byte
+		for count < 30 {
+			vps, sps, pps = videoTrack.SafeParams()
+			count++
+			if vps != nil && sps != nil && pps != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
 		if vps != nil && sps != nil && pps != nil {
 			var spsp h265.SPS
 			err := spsp.Unmarshal(sps)
