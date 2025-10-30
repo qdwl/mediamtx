@@ -2,7 +2,6 @@
 package main
 
 import (
-	"net/http"
 	"os"
 
 	_ "net/http/pprof"
@@ -15,8 +14,8 @@ func main() {
 	if !ok {
 		os.Exit(1)
 	}
-	go func() {
-		http.ListenAndServe(":6060", nil)
-	}()
+	// go func() {
+	// 	http.ListenAndServe(":6060", nil)
+	// }()
 	s.Wait()
 }
