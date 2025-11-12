@@ -805,8 +805,8 @@ paths:
   # Settings under path "all_others" are applied to all paths that
   # do not match another entry.
   all_others:
-    runOnDemand: curl http://127.0.0.1:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onDemand
-    runOnUnDemand: curl http://127.0.0.1:8000/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onUnDemand
+    runOnDemand: curl http://127.0.0.1:8000/api/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onDemand
+    runOnUnDemand: curl http://127.0.0.1:8000/api/mediamtx/hook?path=$MTX_PATH&query=$MTX_QUERY&action=onUnDemand
     runOnDemandRestart: no
     runOnDemandStartTimeout: 15s
     runOnDemandCloseAfter: 15s
