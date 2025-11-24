@@ -810,6 +810,10 @@ paths:
     runOnDemandRestart: no
     runOnDemandStartTimeout: 15s
     runOnDemandCloseAfter: 15s
+    runOnRead: curl http://127.0.0.1:8000/api/mediamtx/hook?path=$MTX_PATH&reader_type=$MTX_READER_TYPE&reader_id=$MTX_READER_ID&query=$MTX_QUERY&action=onRead
+    runOnReadRestart: no
+    runOnUnread: curl http://127.0.0.1:8000/api/mediamtx/hook?path=$MTX_PATH&reader_type=$MTX_READER_TYPE&reader_id=$MTX_READER_ID&query=$MTX_QUERY&action=onUnread
+
 
   #hik-ipc:
   #  runOnDemand: ffmpeg -re -stream_loop -1 -rtsp_transport tcp -i rtsp://admin:hk123456@10.129.126.210:554/Streaming/Channels/1 -c copy -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH

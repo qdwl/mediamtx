@@ -7,6 +7,7 @@ import (
 
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
+	"github.com/bluenviron/mediamtx/internal/externalcmd"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
 	"github.com/bluenviron/mediamtx/internal/stream"
@@ -45,6 +46,7 @@ type Server struct {
 	TrustedProxies   conf.IPNetworks
 	ReadTimeout      conf.Duration
 	WriteQueueSize   int
+	ExternalCmdPool  *externalcmd.Pool
 	PathManager      serverPathManager
 	Parent           serverParent
 
@@ -151,14 +153,15 @@ outer:
 
 func (s *Server) createMuxer(path string, query string, remoteAddr string, conn *flv.Conn) (*muxer, error) {
 	r := &muxer{
-		parentCtx:   s.ctx,
-		remoteAddr:  remoteAddr,
-		wg:          &s.wg,
-		pathName:    path,
-		pathManager: s.PathManager,
-		parent:      s,
-		query:       query,
-		flvConn:     conn,
+		parentCtx:       s.ctx,
+		remoteAddr:      remoteAddr,
+		wg:              &s.wg,
+		pathName:        path,
+		pathManager:     s.PathManager,
+		parent:          s,
+		query:           query,
+		flvConn:         conn,
+		externalCmdPool: s.ExternalCmdPool,
 	}
 	r.initialize()
 	s.muxers[r] = struct{}{}

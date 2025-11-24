@@ -601,6 +601,7 @@ func (p *Core) createResources(initial bool) error {
 			TrustedProxies:   p.conf.FLVTrustedProxies,
 			ReadTimeout:      p.conf.ReadTimeout,
 			WriteQueueSize:   p.conf.WriteQueueSize,
+			ExternalCmdPool:  p.externalCmdPool,
 			PathManager:      p.pathManager,
 			Parent:           p,
 		}

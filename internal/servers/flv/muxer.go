@@ -8,6 +8,8 @@ import (
 
 	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/defs"
+	"github.com/bluenviron/mediamtx/internal/externalcmd"
+	"github.com/bluenviron/mediamtx/internal/hooks"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
 )
@@ -16,15 +18,16 @@ var errNoSupportedCodecs = errors.New(
 	"the stream doesn't contain any supported codec, which are currently H264, MPEG-4 Audio, MPEG-1/2 Audio")
 
 type muxer struct {
-	parentCtx   context.Context
-	remoteAddr  string
-	wg          *sync.WaitGroup
-	pathName    string
-	pathManager serverPathManager
-	parent      *Server
-	query       string
-	flvConn     *flv.Conn
-	transcoder  codec.AudioTranscoder
+	parentCtx       context.Context
+	remoteAddr      string
+	wg              *sync.WaitGroup
+	pathName        string
+	pathManager     serverPathManager
+	parent          *Server
+	query           string
+	flvConn         *flv.Conn
+	transcoder      codec.AudioTranscoder
+	externalCmdPool *externalcmd.Pool
 
 	ctx       context.Context
 	ctxCancel func()
@@ -106,6 +109,16 @@ func (m *muxer) runInner() error {
 	m.Log(logger.Info, "is reading from path '%s', %s",
 		path.Name(), defs.FormatsInfo(stream.ReaderFormats(m)))
 
+	onUnreadHook := hooks.OnRead(hooks.OnReadParams{
+		Logger:          m,
+		ExternalCmdPool: m.externalCmdPool,
+		Conf:            path.SafeConf(),
+		ExternalCmdEnv:  path.ExternalCmdEnv(),
+		Reader:          m.APISourceDescribe(),
+		Query:           m.query,
+	})
+	defer onUnreadHook()
+
 	stream.StartReader(m)
 	defer m.transcoder.Close()
 	defer stream.RemoveReader(m)
@@ -125,6 +138,11 @@ func (m *muxer) runInner() error {
 func (m *muxer) APIReaderDescribe() defs.APIPathSourceOrReader {
 	return defs.APIPathSourceOrReader{
 		Type: "flvMuxer",
-		ID:   "",
+		ID:   m.query,
 	}
+}
+
+// APISourceDescribe implements source.
+func (m *muxer) APISourceDescribe() defs.APIPathSourceOrReader {
+	return m.APIReaderDescribe()
 }
