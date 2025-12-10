@@ -37,25 +37,23 @@ type serverParent interface {
 
 // Server is a FLV server.
 type Server struct {
-	HttpAddress      string
-	WebsocketAddress string
-	Encryption       bool
-	ServerKey        string
-	ServerCert       string
-	AllowOrigin      string
-	TrustedProxies   conf.IPNetworks
-	ReadTimeout      conf.Duration
-	WriteQueueSize   int
-	ExternalCmdPool  *externalcmd.Pool
-	PathManager      serverPathManager
-	Parent           serverParent
+	Address         string
+	Encryption      bool
+	ServerKey       string
+	ServerCert      string
+	AllowOrigin     string
+	TrustedProxies  conf.IPNetworks
+	ReadTimeout     conf.Duration
+	WriteQueueSize  int
+	ExternalCmdPool *externalcmd.Pool
+	PathManager     serverPathManager
+	Parent          serverParent
 
-	ctx             context.Context
-	ctxCancel       func()
-	wg              sync.WaitGroup
-	httpServer      *httpServer
-	websocketServer *websocketServer
-	muxers          map[*muxer]struct{}
+	ctx        context.Context
+	ctxCancel  func()
+	wg         sync.WaitGroup
+	httpServer *httpServer
+	muxers     map[*muxer]struct{}
 
 	// in
 	chNewMuxer   chan newMuxerReq
@@ -73,7 +71,7 @@ func (s *Server) Initialize() error {
 	s.chCloseMuxer = make(chan *muxer)
 
 	s.httpServer = &httpServer{
-		address:        s.HttpAddress,
+		address:        s.Address,
 		encryption:     s.Encryption,
 		serverKey:      s.ServerKey,
 		serverCert:     s.ServerCert,
@@ -87,24 +85,7 @@ func (s *Server) Initialize() error {
 		ctxCancel()
 		return err
 	}
-	s.Log(logger.Info, "http-flv listener opened on "+s.HttpAddress)
-
-	s.websocketServer = &websocketServer{
-		address:        s.WebsocketAddress,
-		encryption:     s.Encryption,
-		serverKey:      s.ServerKey,
-		serverCert:     s.ServerCert,
-		allowOrigin:    s.AllowOrigin,
-		trustedProxies: s.TrustedProxies,
-		readTimeout:    s.ReadTimeout,
-		parent:         s,
-	}
-	err = s.websocketServer.initialize()
-	if err != nil {
-		ctxCancel()
-		return err
-	}
-	s.Log(logger.Info, "websocket-flv listener opened on "+s.WebsocketAddress)
+	s.Log(logger.Info, "http-flv listener opened on "+s.Address)
 
 	s.wg.Add(1)
 	go s.run()
@@ -148,7 +129,6 @@ outer:
 	s.ctxCancel()
 
 	s.httpServer.close()
-	s.websocketServer.close()
 }
 
 func (s *Server) createMuxer(path string, query string, remoteAddr string, conn *flv.Conn) (*muxer, error) {

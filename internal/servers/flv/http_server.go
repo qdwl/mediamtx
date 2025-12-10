@@ -9,8 +9,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
-	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
-	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
+	"github.com/gorilla/websocket"
 )
 
 type httpServer struct {
@@ -22,7 +21,7 @@ type httpServer struct {
 	trustedProxies conf.IPNetworks
 	readTimeout    conf.Duration
 	parent         *Server
-	inner          *httpp.Server
+	httpSrv        *http.Server
 }
 
 func (s *httpServer) initialize() error {
@@ -35,29 +34,37 @@ func (s *httpServer) initialize() error {
 		s.serverCert = ""
 	}
 
-	network, address := restrictnetwork.Restrict("tcp", s.address)
-
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		s.handleConn(w, r)
-	})
+	mux.HandleFunc("/", s.handleConn)
 
-	s.inner = &httpp.Server{
-		Network:     network,
-		Address:     address,
-		ReadTimeout: time.Duration(s.readTimeout),
-		Encryption:  s.encryption,
-		ServerCert:  s.serverCert,
-		ServerKey:   s.serverKey,
-		Handler:     mux,
-		Parent:      s,
+	httpSrv := &http.Server{
+		Addr:         s.address,
+		Handler:      mux,
+		ReadTimeout:  time.Duration(s.readTimeout),
+		WriteTimeout: 0,
 	}
-	err := s.inner.Initialize()
-	if err != nil {
-		return err
-	}
+
+	go func() {
+		var err error
+		if s.encryption {
+			err = httpSrv.ListenAndServeTLS(s.serverCert, s.serverKey)
+		} else {
+			err = httpSrv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
+			s.Log(logger.Error, "server error: %v", err)
+		}
+	}()
 
 	return nil
+}
+
+var wsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 // Log implements logger.Writer.
@@ -66,7 +73,9 @@ func (s *httpServer) Log(level logger.Level, format string, args ...interface{})
 }
 
 func (s *httpServer) close() {
-	s.inner.Close()
+	if s.httpSrv != nil {
+		s.httpSrv.Close()
+	}
 }
 
 func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +99,14 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		s.handleWebSocketFLV(w, r, path)
+	} else {
+		s.handleHTTPFLV(w, r, path)
+	}
+}
+
+func (s *httpServer) handleHTTPFLV(w http.ResponseWriter, r *http.Request, path string) {
 	flvConn := flv.NewConn()
 	muxer, err := s.parent.newMuxer(newMuxerReq{
 		remoteAddr: r.RemoteAddr,
@@ -103,33 +120,38 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 	}
 	defer muxer.Close()
 
+	w.Header().Set("Content-Type", "video/x-flv")
+	flusher := w.(http.Flusher)
+
 	for {
 		select {
 		case header := <-flvConn.FlvHeader:
 			data := header.Marshal()
 			if _, err := w.Write(data); err != nil {
-				s.Log(logger.Error, "write flv header failed %v", err)
+				s.Log(logger.Error, "write http flv header failed %v", err)
 				return
 			}
 
 			data = flv.MarshalTagSize(0)
 			if _, err := w.Write(data); err != nil {
-				s.Log(logger.Error, "write flv tag size failed %v", err)
+				s.Log(logger.Error, "write http flv tag size failed %v", err)
 				return
 			}
+			flusher.Flush()
 
 		case tag := <-flvConn.FlvTags:
 			data := tag.Marshal()
 			if _, err := w.Write(data); err != nil {
-				s.Log(logger.Error, "write flv tag failed %v", err)
+				s.Log(logger.Error, "write http flv tag failed %v", err)
 				return
 			}
 
 			data = flv.MarshalTagSize(len(data))
 			if _, err := w.Write(data); err != nil {
-				s.Log(logger.Error, "write flv tag size failed %v", err)
+				s.Log(logger.Error, "write http flv tag size failed %v", err)
 				return
 			}
+			flusher.Flush()
 
 		case <-muxer.Context().Done():
 			s.Log(logger.Info, "flv conn closed")
@@ -137,6 +159,93 @@ func (s *httpServer) handleConn(w http.ResponseWriter, r *http.Request) {
 
 		case <-r.Context().Done():
 			s.Log(logger.Info, "http flv client disconnected")
+			return
+		}
+	}
+}
+
+func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, path string) {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		s.Log(logger.Error, "websocket upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+	s.Log(logger.Info, "handle websocket flv path:%s", path)
+
+	flvConn := flv.NewConn()
+	muxer, err := s.parent.newMuxer(newMuxerReq{
+		remoteAddr: r.RemoteAddr,
+		path:       path,
+		query:      r.URL.RawQuery,
+		flvConn:    flvConn,
+	})
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, []byte("invalid path"))
+		return
+	}
+	defer muxer.Close()
+
+	const (
+		pongWait   = 30 * time.Second // must receive pong in this time
+		pingPeriod = 10 * time.Second // send ping every X sec
+	)
+
+	// 初始 ReadDeadline
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		// 收到 pong → 延长 ReadDeadline
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	// goroutine：必须读消息，否则 WS 会卡死
+	go func() {
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				conn.Close()
+				return
+			}
+		}
+	}()
+
+	// goroutine：定期发送 ping
+	pingTicker := time.NewTicker(pingPeriod)
+	defer pingTicker.Stop()
+
+	for {
+		select {
+		case <-pingTicker.C:
+			// 发送 ping，WriteControl 会自动带 timeout
+			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second)); err != nil {
+				s.Log(logger.Info, "ws send ping failed: %v", err)
+				return
+			}
+
+		case header := <-flvConn.FlvHeader:
+			data := header.Marshal()
+			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+				s.Log(logger.Info, "ws flv header send failed: %v", err)
+				return
+			}
+			if err := conn.WriteMessage(websocket.BinaryMessage, flv.MarshalTagSize(0)); err != nil {
+				s.Log(logger.Info, "ws pre-tag send failed: %v", err)
+				return
+			}
+
+		case tag := <-flvConn.FlvTags:
+			data := tag.Marshal()
+			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+				s.Log(logger.Info, "ws tag send failed: %v", err)
+				return
+			}
+			if err := conn.WriteMessage(websocket.BinaryMessage, flv.MarshalTagSize(len(data))); err != nil {
+				s.Log(logger.Info, "ws pre-tag send failed: %v", err)
+				return
+			}
+
+		case <-muxer.Context().Done():
+			s.Log(logger.Info, "ws flv muxer closed")
 			return
 		}
 	}

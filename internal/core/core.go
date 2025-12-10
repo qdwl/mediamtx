@@ -592,18 +592,17 @@ func (p *Core) createResources(initial bool) error {
 	if p.conf.FLV &&
 		p.flvServer == nil {
 		i := &flv.Server{
-			HttpAddress:      p.conf.FLVHttpAddress,
-			WebsocketAddress: p.conf.FLVWebsocketAddress,
-			Encryption:       p.conf.FLVEncryption,
-			ServerKey:        p.conf.FLVServerKey,
-			ServerCert:       p.conf.FLVServerCert,
-			AllowOrigin:      p.conf.FLVAllowOrigin,
-			TrustedProxies:   p.conf.FLVTrustedProxies,
-			ReadTimeout:      p.conf.ReadTimeout,
-			WriteQueueSize:   p.conf.WriteQueueSize,
-			ExternalCmdPool:  p.externalCmdPool,
-			PathManager:      p.pathManager,
-			Parent:           p,
+			Address:         p.conf.FLVAddress,
+			Encryption:      p.conf.FLVEncryption,
+			ServerKey:       p.conf.FLVServerKey,
+			ServerCert:      p.conf.FLVServerCert,
+			AllowOrigin:     p.conf.FLVAllowOrigin,
+			TrustedProxies:  p.conf.FLVTrustedProxies,
+			ReadTimeout:     p.conf.ReadTimeout,
+			WriteQueueSize:  p.conf.WriteQueueSize,
+			ExternalCmdPool: p.externalCmdPool,
+			PathManager:     p.pathManager,
+			Parent:          p,
 		}
 		err := i.Initialize()
 		if err != nil {
@@ -906,8 +905,7 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 
 	closeFLVServer := newConf == nil ||
 		newConf.FLV != p.conf.FLV ||
-		newConf.FLVHttpAddress != p.conf.FLVHttpAddress ||
-		newConf.FLVWebsocketAddress != p.conf.FLVWebsocketAddress ||
+		newConf.FLVAddress != p.conf.FLVAddress ||
 		newConf.FLVAllowOrigin != p.conf.FLVAllowOrigin ||
 		newConf.FLVEncryption != p.conf.FLVEncryption ||
 		newConf.FLVServerCert != p.conf.FLVServerCert ||

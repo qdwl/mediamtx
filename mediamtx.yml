@@ -418,10 +418,8 @@ srtAddress: :8890
 
 # Enable publishing and reading streams with the FLV protocol.
 flv: yes
-# Address of the FLV HTTP listener.
-flvHttpAddress: :26101
-# Address of the FLV Websocket listener.
-flvWebsocketAddress: :26102
+# Address of the FLV HTTP/WebSocket listener.
+flvAddress: :26101
 # Enable TLS/HTTPS on the FLV server.
 flvEncryption: no
 # Path to the server key. This is needed only when encryption is yes.

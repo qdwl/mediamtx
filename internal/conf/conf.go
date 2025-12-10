@@ -295,14 +295,13 @@ type Conf struct {
 	SRTAddress string `json:"srtAddress"`
 
 	// FLV server
-	FLV                 bool       `json:"flv"`
-	FLVHttpAddress      string     `json:"flvHttpAddress"`
-	FLVWebsocketAddress string     `json:"flvWebsocketAddress"`
-	FLVEncryption       bool       `json:"flvEncryption"`
-	FLVServerKey        string     `json:"flvServerKey"`
-	FLVServerCert       string     `json:"flvServerCert"`
-	FLVAllowOrigin      string     `json:"flvAllowOrigin"`
-	FLVTrustedProxies   IPNetworks `json:"flvTrustedProxies"`
+	FLV               bool       `json:"flv"`
+	FLVAddress        string     `json:"flvAddress"`
+	FLVEncryption     bool       `json:"flvEncryption"`
+	FLVServerKey      string     `json:"flvServerKey"`
+	FLVServerCert     string     `json:"flvServerCert"`
+	FLVAllowOrigin    string     `json:"flvAllowOrigin"`
+	FLVTrustedProxies IPNetworks `json:"flvTrustedProxies"`
 
 	// GB28181 server
 	GB28181               bool       `json:"gb28181"`
@@ -451,8 +450,7 @@ func (conf *Conf) setDefaults() {
 
 	// FLV server
 	conf.FLV = true
-	conf.FLVHttpAddress = ":8891"
-	conf.FLVWebsocketAddress = ":8892"
+	conf.FLVAddress = ":8891"
 	conf.FLVAllowOrigin = "*"
 
 	// GB28281 server
