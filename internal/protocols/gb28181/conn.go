@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
 	"github.com/bluenviron/mediacommon/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/pkg/codecs/h265"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/mpegps"
 	"github.com/bluenviron/mediamtx/internal/protocols/gb28181/transport"
 	"github.com/pion/rtp"
@@ -73,6 +73,7 @@ type trackProbeReq struct {
 }
 
 type Conn struct {
+	logWriter           logger.Writer
 	port                int
 	protocol            int
 	transport           transport.Transport
@@ -107,6 +108,7 @@ type Conn struct {
 
 func NewConn(
 	parentCtx context.Context,
+	logWriter logger.Writer,
 	port int,
 	remoteIp string,
 	remotePort int,
@@ -117,6 +119,7 @@ func NewConn(
 	ctx, ctxCancel := context.WithCancel(parentCtx)
 
 	c := &Conn{
+		logWriter:      logWriter,
 		port:           port,
 		protocol:       protocol,
 		ctx:            ctx,
@@ -151,7 +154,7 @@ func NewConn(
 	case TcpServer:
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
 	}
-	log.Printf("protocol:%d, localAddr:%s, remoteAddr:%s, transport:%+v\n", protocol, localAddr, remoteAddr, c.transport)
+	c.Log(logger.Info, "protocol:%d, localAddr:%s, remoteAddr:%s, transport:%+v", protocol, localAddr, remoteAddr, c.transport)
 
 	c.muxer.OnPacket = c.OnMuxPacket
 	c.demuxer.OnPacket = c.OnDemuxPacket
@@ -160,6 +163,11 @@ func NewConn(
 	go c.run()
 
 	return c
+}
+
+// Log is the main logging function.
+func (c *Conn) Log(level logger.Level, format string, args ...interface{}) {
+	c.logWriter.Log(level, "[Conn] "+format, args...)
 }
 
 func (c *Conn) Close() {
@@ -337,7 +345,7 @@ func (c *Conn) run() {
 			case <-ticker.C:
 				now := time.Now()
 				if c.lastActiveTime.Add(10 * time.Second).Before(now) {
-					log.Printf("check gb28181 conn error\n")
+					c.Log(logger.Info, "gb28181 conn gt 10s on active, close it")
 					return
 				}
 
@@ -539,7 +547,7 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 				count++
 			} else if track.Updated.Add(time.Second).Before(time.Now()) {
 				delete(c.tracks, key)
-				fmt.Printf("delete expired and uncomplete track %v\n", track)
+				c.Log(logger.Info, "delete expired and uncomplete track %v\n", track)
 			}
 		}
 		if count == len(c.tracks) && count > 0 {
@@ -550,14 +558,15 @@ func (c *Conn) ProcessPsPacket(pkt mpeg2.Display) {
 
 func (c *Conn) WriteVideo(frame []byte, pts uint64, dts uint64) {
 	if err := c.muxer.Write(c.vcid, frame, pts, dts); err != nil {
-		fmt.Printf("write video frame error %v\n", err)
+		c.Log(logger.Error, "write video frame error %s", err.Error())
 	}
 }
 
 func (c *Conn) WriteAudio(frame []byte, pts uint64, dts uint64) {
 	if c.payloadType == PayloadTypeMepgPs {
 		if err := c.muxer.Write(c.acid, frame, pts, dts); err != nil {
-			fmt.Printf("write audio frame error %v\n", err)
+			c.Log(logger.Error, "write audio frame error %s", err.Error())
+
 		}
 	} else {
 		c.OnMuxPacket(frame, pts)

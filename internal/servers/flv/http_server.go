@@ -60,8 +60,9 @@ func (s *httpServer) initialize() error {
 }
 
 var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:   1024,
+	WriteBufferSize:  1024,
+	HandshakeTimeout: 10 * time.Second,
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -201,10 +202,38 @@ func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, 
 
 	// goroutine：必须读消息，否则 WS 会卡死
 	go func() {
+		defer conn.Close()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
-				conn.Close()
+				s.Log(logger.Error, "ws read message failed %s", err.Error())
 				return
+			}
+
+			messageType, p, err := conn.ReadMessage()
+			if err != nil {
+				// 检查是否是正常关闭
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+					s.Log(logger.Error, "client close connection %s", err.Error())
+				} else {
+					s.Log(logger.Error, "read message faield: %s", err.Error())
+				}
+				return
+			}
+
+			switch messageType {
+			case websocket.CloseMessage:
+				s.Log(logger.Info, "receive client close message")
+				return
+
+			case websocket.PingMessage:
+				s.Log(logger.Info, "receive client ping message")
+				conn.WriteMessage(websocket.PongMessage, p)
+
+			case websocket.TextMessage:
+				s.Log(logger.Info, "receive client text message")
+
+			case websocket.BinaryMessage:
+				s.Log(logger.Info, "receive client binary message")
 			}
 		}
 	}()
@@ -217,13 +246,14 @@ func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, 
 		select {
 		case <-pingTicker.C:
 			// 发送 ping，WriteControl 会自动带 timeout
-			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second)); err != nil {
+			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(10*time.Second)); err != nil {
 				s.Log(logger.Info, "ws send ping failed: %v", err)
 				return
 			}
 
 		case header := <-flvConn.FlvHeader:
 			data := header.Marshal()
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				s.Log(logger.Info, "ws flv header send failed: %v", err)
 				return
@@ -235,10 +265,13 @@ func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, 
 
 		case tag := <-flvConn.FlvTags:
 			data := tag.Marshal()
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				s.Log(logger.Info, "ws tag send failed: %v", err)
 				return
 			}
+
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteMessage(websocket.BinaryMessage, flv.MarshalTagSize(len(data))); err != nil {
 				s.Log(logger.Info, "ws pre-tag send failed: %v", err)
 				return

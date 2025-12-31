@@ -45,6 +45,7 @@ func (s *session) initialize() {
 	s.uuid = uuid.New()
 	s.conn = gb28181.NewConn(
 		ctx,
+		s.parent,
 		s.portPair.RTPPort,
 		s.req.remoteIp,
 		s.req.remotePort,
@@ -147,9 +148,11 @@ func (s *session) runPublish() error {
 
 	select {
 	case <-s.ctx.Done():
+		s.Log(logger.Info, "gb28181 server session done")
 		return nil
 
 	case <-s.conn.Done():
+		s.Log(logger.Info, "gb28181 connection done")
 		return nil
 	}
 }

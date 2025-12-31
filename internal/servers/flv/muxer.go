@@ -12,6 +12,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/hooks"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/flv"
+	"github.com/google/uuid"
 )
 
 var errNoSupportedCodecs = errors.New(
@@ -31,6 +32,7 @@ type muxer struct {
 
 	ctx       context.Context
 	ctxCancel func()
+	uuid      uuid.UUID
 	path      defs.Path
 }
 
@@ -39,6 +41,7 @@ func (m *muxer) initialize() {
 
 	m.ctx = ctx
 	m.ctxCancel = ctxCancel
+	m.uuid = uuid.New()
 
 	m.Log(logger.Info, "opened")
 
@@ -138,7 +141,7 @@ func (m *muxer) runInner() error {
 func (m *muxer) APIReaderDescribe() defs.APIPathSourceOrReader {
 	return defs.APIPathSourceOrReader{
 		Type: "flvMuxer",
-		ID:   m.query,
+		ID:   m.uuid.String(),
 	}
 }
 
