@@ -188,6 +188,8 @@ func (a *API) Initialize() error {
 	group.GET("/recordings/list", a.onRecordingsList)
 	group.GET("/recordings/get/*name", a.onRecordingsGet)
 	group.DELETE("/recordings/deletesegment", a.onRecordingDeleteSegment)
+	group.POST("/recordings/control/*name", a.onPathStartRecording)
+	group.DELETE("/recordings/control/*name", a.onPathStopRecording)
 
 	network, address := restrictnetwork.Restrict("tcp", a.Address)
 
@@ -581,6 +583,46 @@ func (a *API) onPathsGet(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, data)
+}
+
+func (a *API) onPathStartRecording(ctx *gin.Context) {
+	pathName, ok := paramName(ctx)
+	if !ok {
+		a.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid name"))
+		return
+	}
+
+	err := a.PathManager.APIPathStartRecording(pathName)
+	if err != nil {
+		if errors.Is(err, conf.ErrPathNotFound) {
+			a.writeError(ctx, http.StatusNotFound, err)
+		} else {
+			a.writeError(ctx, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.Status(http.StatusOK)
+}
+
+func (a *API) onPathStopRecording(ctx *gin.Context) {
+	pathName, ok := paramName(ctx)
+	if !ok {
+		a.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid name"))
+		return
+	}
+
+	err := a.PathManager.APIPathStopRecording(pathName)
+	if err != nil {
+		if errors.Is(err, conf.ErrPathNotFound) {
+			a.writeError(ctx, http.StatusNotFound, err)
+		} else {
+			a.writeError(ctx, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.Status(http.StatusOK)
 }
 
 func (a *API) onRTSPConnsList(ctx *gin.Context) {

@@ -12,6 +12,8 @@ import (
 type APIPathManager interface {
 	APIPathsList() (*APIPathList, error)
 	APIPathsGet(string) (*APIPath, error)
+	APIPathStartRecording(string) error
+	APIPathStopRecording(string) error
 }
 
 // APIHLSServer contains methods used by the API and Metrics server.
@@ -78,6 +80,7 @@ type APIPath struct {
 	Tracks        []string                `json:"tracks"`
 	BytesReceived uint64                  `json:"bytesReceived"`
 	BytesSent     uint64                  `json:"bytesSent"`
+	Recording     bool                    `json:"recording"`
 	Readers       []APIPathSourceOrReader `json:"readers"`
 }
 

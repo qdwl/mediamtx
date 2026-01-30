@@ -63,6 +63,26 @@ type pathAPIPathsGetReq struct {
 	res  chan pathAPIPathsGetRes
 }
 
+type pathAPIStartRecordingRes struct {
+	path *path
+	err  error
+}
+
+type pathAPIStartRecordingReq struct {
+	name string
+	res  chan pathAPIStartRecordingRes
+}
+
+type pathAPIStopRecordingRes struct {
+	path *path
+	err  error
+}
+
+type pathAPIStopRecordingReq struct {
+	name string
+	res  chan pathAPIStopRecordingRes
+}
+
 type path struct {
 	parentCtx         context.Context
 	logLevel          conf.LogLevel
@@ -85,6 +105,7 @@ type path struct {
 	publisherQuery                 string
 	stream                         *stream.Stream
 	recorder                       *recorder.Recorder
+	needRecording                  bool
 	readyTime                      time.Time
 	onUnDemandHook                 func(string)
 	onNotReadyHook                 func()
@@ -110,6 +131,8 @@ type path struct {
 	chAddReader               chan defs.PathAddReaderReq
 	chRemoveReader            chan defs.PathRemoveReaderReq
 	chAPIPathsGet             chan pathAPIPathsGetReq
+	chAPIStartRecording       chan pathAPIStartRecordingReq
+	chAPIStopRecording        chan pathAPIStopRecordingReq
 
 	// out
 	done chan struct{}
@@ -136,6 +159,8 @@ func (pa *path) initialize() {
 	pa.chAddReader = make(chan defs.PathAddReaderReq)
 	pa.chRemoveReader = make(chan defs.PathRemoveReaderReq)
 	pa.chAPIPathsGet = make(chan pathAPIPathsGetReq)
+	pa.chAPIStartRecording = make(chan pathAPIStartRecordingReq)
+	pa.chAPIStopRecording = make(chan pathAPIStopRecordingReq)
 	pa.done = make(chan struct{})
 
 	pa.Log(logger.Debug, "created")
@@ -163,6 +188,10 @@ func (pa *path) Name() string {
 
 func (pa *path) isReady() bool {
 	return pa.stream != nil
+}
+
+func (pa *path) NeedRecording() bool {
+	return pa.needRecording
 }
 
 func (pa *path) run() {
@@ -318,6 +347,12 @@ func (pa *path) runInner() error {
 
 		case req := <-pa.chAPIPathsGet:
 			pa.doAPIPathsGet(req)
+
+		case req := <-pa.chAPIStartRecording:
+			pa.doAPIStartRecording(req)
+
+		case req := <-pa.chAPIStopRecording:
+			pa.doAPIStopRecording(req)
 
 		case <-pa.ctx.Done():
 			return fmt.Errorf("terminated")
@@ -560,6 +595,21 @@ func (pa *path) doRemoveReader(req defs.PathRemoveReaderReq) {
 	}
 }
 
+func (pa *path) doAPIStartRecording(req pathAPIStartRecordingReq) {
+	pa.needRecording = true
+	if pa.stream != nil && pa.recorder == nil {
+		pa.startRecording()
+	}
+	req.res <- pathAPIStartRecordingRes{err: nil}
+}
+
+func (pa *path) doAPIStopRecording(req pathAPIStopRecordingReq) {
+	pa.needRecording = false
+	pa.stopRecording()
+
+	req.res <- pathAPIStopRecordingRes{err: nil}
+}
+
 func (pa *path) doAPIPathsGet(req pathAPIPathsGetReq) {
 	req.res <- pathAPIPathsGetRes{
 		data: &defs.APIPath{
@@ -598,6 +648,7 @@ func (pa *path) doAPIPathsGet(req pathAPIPathsGetReq) {
 				}
 				return pa.stream.BytesSent()
 			}(),
+			Recording: pa.NeedRecording(),
 			Readers: func() []defs.APIPathSourceOrReader {
 				ret := []defs.APIPathSourceOrReader{}
 				for r := range pa.readers {
@@ -770,6 +821,10 @@ func (pa *path) setNotReady() {
 }
 
 func (pa *path) startRecording() {
+	if !pa.needRecording {
+		return
+	}
+
 	pa.recorder = &recorder.Recorder{
 		PathFormat:      pa.conf.RecordPath,
 		Format:          pa.conf.RecordFormat,
@@ -809,6 +864,13 @@ func (pa *path) startRecording() {
 		Parent: pa,
 	}
 	pa.recorder.Initialize()
+}
+
+func (pa *path) stopRecording() {
+	if pa.recorder != nil {
+		pa.recorder.Close()
+		pa.recorder = nil
+	}
 }
 
 func (pa *path) executeRemoveReader(r defs.Reader) {
@@ -974,6 +1036,30 @@ func (pa *path) RemoveReader(req defs.PathRemoveReaderReq) {
 	case pa.chRemoveReader <- req:
 		<-req.Res
 	case <-pa.ctx.Done():
+	}
+}
+
+// APIStartRecording is called by a recording manager through pathManager.
+func (pa *path) APIStartRecording(req pathAPIStartRecordingReq) error {
+	select {
+	case pa.chAPIStartRecording <- req:
+		res := <-req.res
+		return res.err
+
+	case <-pa.ctx.Done():
+		return fmt.Errorf("terminated")
+	}
+}
+
+// APIStopRecording is called by a recording manager through pathManager.
+func (pa *path) APIStopRecording(req pathAPIStopRecordingReq) error {
+	select {
+	case pa.chAPIStopRecording <- req:
+		res := <-req.res
+		return res.err
+
+	case <-pa.ctx.Done():
+		return fmt.Errorf("terminated")
 	}
 }
 

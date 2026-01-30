@@ -80,17 +80,19 @@ type pathManager struct {
 	pathsByConf map[string]map[*path]struct{}
 
 	// in
-	chReloadConf   chan map[string]*conf.Path
-	chSetHLSServer chan pathSetHLSServerReq
-	chClosePath    chan *path
-	chPathReady    chan *path
-	chPathNotReady chan *path
-	chFindPathConf chan defs.PathFindPathConfReq
-	chDescribe     chan defs.PathDescribeReq
-	chAddReader    chan defs.PathAddReaderReq
-	chAddPublisher chan defs.PathAddPublisherReq
-	chAPIPathsList chan pathAPIPathsListReq
-	chAPIPathsGet  chan pathAPIPathsGetReq
+	chReloadConf        chan map[string]*conf.Path
+	chSetHLSServer      chan pathSetHLSServerReq
+	chClosePath         chan *path
+	chPathReady         chan *path
+	chPathNotReady      chan *path
+	chFindPathConf      chan defs.PathFindPathConfReq
+	chDescribe          chan defs.PathDescribeReq
+	chAddReader         chan defs.PathAddReaderReq
+	chAddPublisher      chan defs.PathAddPublisherReq
+	chAPIPathsList      chan pathAPIPathsListReq
+	chAPIPathsGet       chan pathAPIPathsGetReq
+	chAPIStartRecording chan pathAPIStartRecordingReq
+	chAPIStopRecording  chan pathAPIStopRecordingReq
 }
 
 func (pm *pathManager) initialize() {
@@ -111,6 +113,8 @@ func (pm *pathManager) initialize() {
 	pm.chAddPublisher = make(chan defs.PathAddPublisherReq)
 	pm.chAPIPathsList = make(chan pathAPIPathsListReq)
 	pm.chAPIPathsGet = make(chan pathAPIPathsGetReq)
+	pm.chAPIStartRecording = make(chan pathAPIStartRecordingReq)
+	pm.chAPIStopRecording = make(chan pathAPIStopRecordingReq)
 
 	for _, pathConf := range pm.pathConfs {
 		if pathConf.Regexp == nil {
@@ -183,6 +187,12 @@ outer:
 
 		case req := <-pm.chAPIPathsGet:
 			pm.doAPIPathsGet(req)
+
+		case req := <-pm.chAPIStartRecording:
+			pm.doAPIPathStartRecording(req)
+
+		case req := <-pm.chAPIStopRecording:
+			pm.doAPIPathStopRecording(req)
 
 		case <-pm.ctx.Done():
 			break outer
@@ -378,6 +388,26 @@ func (pm *pathManager) doAPIPathsGet(req pathAPIPathsGetReq) {
 	}
 
 	req.res <- pathAPIPathsGetRes{path: pd.path}
+}
+
+func (pm *pathManager) doAPIPathStartRecording(req pathAPIStartRecordingReq) {
+	pd, ok := pm.paths[req.name]
+	if !ok {
+		req.res <- pathAPIStartRecordingRes{err: conf.ErrPathNotFound}
+		return
+	}
+
+	req.res <- pathAPIStartRecordingRes{path: pd.path}
+}
+
+func (pm *pathManager) doAPIPathStopRecording(req pathAPIStopRecordingReq) {
+	pd, ok := pm.paths[req.name]
+	if !ok {
+		req.res <- pathAPIStopRecordingRes{err: conf.ErrPathNotFound}
+		return
+	}
+
+	req.res <- pathAPIStopRecordingRes{path: pd.path}
 }
 
 func (pm *pathManager) createPath(
@@ -592,4 +622,49 @@ func (pm *pathManager) APIPathsGet(name string) (*defs.APIPath, error) {
 	case <-pm.ctx.Done():
 		return nil, fmt.Errorf("terminated")
 	}
+}
+
+// APIPathStartRecording is called by api
+func (pm *pathManager) APIPathStartRecording(name string) error {
+	req := pathAPIStartRecordingReq{
+		name: name,
+		res:  make(chan pathAPIStartRecordingRes),
+	}
+
+	select {
+	case pm.chAPIStartRecording <- req:
+		res := <-req.res
+		if res.err != nil {
+			return res.err
+		}
+
+		err := res.path.APIStartRecording(req)
+		return err
+
+	case <-pm.ctx.Done():
+		return fmt.Errorf("terminated")
+	}
+}
+
+// APIPathStopRecording is called by api
+func (pm *pathManager) APIPathStopRecording(name string) error {
+	req := pathAPIStopRecordingReq{
+		name: name,
+		res:  make(chan pathAPIStopRecordingRes),
+	}
+
+	select {
+	case pm.chAPIStopRecording <- req:
+		res := <-req.res
+		if res.err != nil {
+			return res.err
+		}
+
+		err := res.path.APIStopRecording(req)
+		return err
+
+	case <-pm.ctx.Done():
+		return fmt.Errorf("terminated")
+	}
+
 }
