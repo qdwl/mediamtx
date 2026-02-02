@@ -213,7 +213,7 @@ pprofTrustedProxies: []
 # Enable downloading recordings from the playback server.
 playback: no
 # Address of the playback server listener.
-playbackAddress: :9996
+playbackAddress: :26105
 # Enable TLS/HTTPS on the playback server.
 playbackEncryption: no
 # Path to the server key. This is needed only when encryption is yes.

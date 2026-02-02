@@ -26,6 +26,7 @@ type parsedSegment struct {
 	start    time.Time
 	init     *fmp4.Init
 	duration time.Duration
+	fileSize int64
 }
 
 func parseSegment(seg *recordstore.Segment) (*parsedSegment, error) {
@@ -49,10 +50,13 @@ func parseSegment(seg *recordstore.Segment) (*parsedSegment, error) {
 		}
 	}
 
+	fileInfo, _ := f.Stat()
+
 	return &parsedSegment{
 		start:    seg.Start,
 		init:     init,
 		duration: duration,
+		fileSize: fileInfo.Size(),
 	}, nil
 }
 
@@ -85,31 +89,44 @@ func parseSegments(segments []*recordstore.Segment) ([]*parsedSegment, error) {
 
 type listEntry struct {
 	Start    time.Time         `json:"start"`
+	End      time.Time         `json:"end"`
+	FileSize int64             `json:"fileSize"`
 	Duration listEntryDuration `json:"duration"`
 	URL      string            `json:"url"`
 }
 
 func concatenateSegments(parsed []*parsedSegment) []listEntry {
 	out := []listEntry{}
-	var prevInit *fmp4.Init
+	// var prevInit *fmp4.Init
+
+	// for _, parsed := range parsed {
+	// 	if len(out) != 0 && segmentFMP4CanBeConcatenated(
+	// 		prevInit,
+	// 		out[len(out)-1].Start.Add(time.Duration(out[len(out)-1].Duration)),
+	// 		parsed.init,
+	// 		parsed.start) {
+	// 		prevStart := out[len(out)-1].Start
+	// 		curEnd := parsed.start.Add(parsed.duration)
+	// 		out[len(out)-1].Duration = listEntryDuration(curEnd.Sub(prevStart))
+	// 	} else {
+	// 		out = append(out, listEntry{
+	// 			Start:    parsed.start,
+	// 			End:      parsed.start.Add(parsed.duration),
+	// 			FileSize: parsed.fileSize,
+	// 			Duration: listEntryDuration(parsed.duration),
+	// 		})
+	// 	}
+
+	// 	prevInit = parsed.init
+	// }
 
 	for _, parsed := range parsed {
-		if len(out) != 0 && segmentFMP4CanBeConcatenated(
-			prevInit,
-			out[len(out)-1].Start.Add(time.Duration(out[len(out)-1].Duration)),
-			parsed.init,
-			parsed.start) {
-			prevStart := out[len(out)-1].Start
-			curEnd := parsed.start.Add(parsed.duration)
-			out[len(out)-1].Duration = listEntryDuration(curEnd.Sub(prevStart))
-		} else {
-			out = append(out, listEntry{
-				Start:    parsed.start,
-				Duration: listEntryDuration(parsed.duration),
-			})
-		}
-
-		prevInit = parsed.init
+		out = append(out, listEntry{
+			Start:    parsed.start,
+			End:      parsed.start.Add(parsed.duration),
+			FileSize: parsed.fileSize,
+			Duration: listEntryDuration(parsed.duration),
+		})
 	}
 
 	return out

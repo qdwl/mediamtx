@@ -191,6 +191,8 @@ func (a *API) Initialize() error {
 	group.POST("/recordings/control/*name", a.onPathStartRecording)
 	group.DELETE("/recordings/control/*name", a.onPathStopRecording)
 
+	group.GET("/playback/list", a.onRecordingsList)
+
 	network, address := restrictnetwork.Restrict("tcp", a.Address)
 
 	a.httpServer = &httpp.Server{
