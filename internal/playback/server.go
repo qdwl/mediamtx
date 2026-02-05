@@ -2,21 +2,36 @@
 package playback
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/bluenviron/gortsplib/v4/pkg/description"
+	"github.com/bluenviron/gortsplib/v4/pkg/format"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
+
 	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
+	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/protocols/httpp"
+	"github.com/bluenviron/mediamtx/internal/recordstore"
 	"github.com/bluenviron/mediamtx/internal/restrictnetwork"
+	"github.com/bluenviron/mediamtx/internal/stream"
 	"github.com/gin-gonic/gin"
 )
 
 type serverAuthManager interface {
 	Authenticate(req *auth.Request) error
+}
+
+type serverPathManager interface {
+	AddPublisher(req defs.PathAddPublisherReq) (defs.Path, error)
+	AddReader(req defs.PathAddReaderReq) (defs.Path, *stream.Stream, error)
 }
 
 // Server is the playback server.
@@ -30,10 +45,13 @@ type Server struct {
 	ReadTimeout    conf.Duration
 	PathConfs      map[string]*conf.Path
 	AuthManager    serverAuthManager
+	PathManager    serverPathManager
 	Parent         logger.Writer
 
-	httpServer *httpp.Server
-	mutex      sync.RWMutex
+	httpServer       *httpp.Server
+	mutex            sync.RWMutex
+	playbackSessions map[string]*playbackSession
+	playbackMutex    sync.RWMutex
 }
 
 // Initialize initializes Server.
@@ -45,6 +63,9 @@ func (s *Server) Initialize() error {
 
 	router.GET("/list", s.onList)
 	router.GET("/get", s.onGet)
+	router.POST("/start", s.onStart)
+	router.POST("/stop", s.onStop)
+	router.POST("/control", s.onControl)
 
 	network, address := restrictnetwork.Restrict("tcp", s.Address)
 
@@ -62,6 +83,8 @@ func (s *Server) Initialize() error {
 	if err != nil {
 		return err
 	}
+
+	s.playbackSessions = make(map[string]*playbackSession)
 
 	s.Log(logger.Info, "listener opened on "+address)
 
@@ -94,12 +117,11 @@ func (s *Server) writeError(ctx *gin.Context, status int, err error) {
 	ctx.String(status, err.Error())
 }
 
-func (s *Server) safeFindPathConf(name string) (*conf.Path, error) {
+func (s *Server) safeFindPathConf(name string) (*conf.Path, []string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	pathConf, _, err := conf.FindPathConf(s.PathConfs, name)
-	return pathConf, err
+	return conf.FindPathConf(s.PathConfs, name)
 }
 
 func (s *Server) middlewareOrigin(ctx *gin.Context) {
@@ -144,4 +166,309 @@ func (s *Server) doAuth(ctx *gin.Context, pathName string) bool {
 	}
 
 	return true
+}
+
+// onStart handles the start playback request.
+func (s *Server) onStart(ctx *gin.Context) {
+	// Parse parameters
+	sourcePath := ctx.PostForm("sourcePath")
+	playbackPath := ctx.PostForm("playbackPath")
+	startTimeStr := ctx.PostForm("startTime")
+	endTimeStr := ctx.PostForm("endTime")
+
+	if sourcePath == "" || playbackPath == "" || startTimeStr == "" || endTimeStr == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing required parameters"))
+		return
+	}
+
+	// Authenticate
+	if !s.doAuth(ctx, sourcePath) {
+		return
+	}
+
+	// Parse time parameters
+	startTime, err := time.Parse(time.RFC3339, startTimeStr)
+	if err != nil {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid startTime: %w", err))
+		return
+	}
+
+	endTime, err := time.Parse(time.RFC3339, endTimeStr)
+	if err != nil {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid endTime: %w", err))
+		return
+	}
+
+	if endTime.Before(startTime) {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("endTime must be after startTime"))
+		return
+	}
+
+	// Find path configuration
+	_, _, err = s.safeFindPathConf(sourcePath)
+	if err != nil {
+		s.writeError(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// Create playback session
+	session := &playbackSession{
+		id:              sessionID,
+		sourcePath:      sourcePath,
+		playbackPath:    playbackPath,
+		startTime:       startTime,
+		endTime:         endTime,
+		status:          "starting",
+		currentPosition: 0,
+		playbackSpeed:   1.0,
+		done:            make(chan struct{}),
+		server:          s,
+	}
+
+	// Add session to map
+	s.playbackMutex.Lock()
+	s.playbackSessions[sessionID] = session
+	s.playbackMutex.Unlock()
+
+	// Create access request
+	accessReq := defs.PathAccessRequest{
+		Name:    playbackPath,
+		Query:   "",
+		Publish: true,
+		Proto:   auth.ProtocolRTSP, // Use RTSP as fallback since there's no HTTP protocol defined
+		IP:      net.ParseIP(ctx.ClientIP()),
+	}
+
+	// Add publisher
+	path, err := s.PathManager.AddPublisher(defs.PathAddPublisherReq{
+		Author:        session,
+		AccessRequest: accessReq,
+	})
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to add publisher: %w", err))
+		return
+	}
+
+	session.path = path
+	session.status = "playing"
+
+	// Start publisher to begin playback
+	// Generate stream description from recording's init data
+	var desc *description.Session
+
+	// Find path configuration
+	pathConf, _, err := s.safeFindPathConf(session.sourcePath)
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to find path configuration: %w", err))
+		return
+	}
+
+	// Find recording segments
+	segments, err := recordstore.FindSegments(pathConf, session.sourcePath, &session.startTime, &session.endTime)
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to find recording segments: %w", err))
+		return
+	}
+
+	if len(segments) == 0 {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("no recording segments found"))
+		return
+	}
+
+	// Read init data from first segment
+	file, err := os.Open(segments[0].Fpath)
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to open segment file: %w", err))
+		return
+	}
+	init, _, err := segmentFMP4ReadHeader(file)
+	file.Close()
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to read init data: %w", err))
+		return
+	}
+
+	// Create stream description from init data
+	desc = &description.Session{}
+	for _, track := range init.Tracks {
+		media := &description.Media{}
+		switch codec := track.Codec.(type) {
+		case *fmp4.CodecH264:
+			media.Type = description.MediaTypeVideo
+			media.Formats = []format.Format{
+				&format.H264{
+					PayloadTyp:        96,
+					PacketizationMode: 1,
+					SPS:               codec.SPS,
+					PPS:               codec.PPS,
+				},
+			}
+		case *fmp4.CodecH265:
+			media.Type = description.MediaTypeVideo
+			media.Formats = []format.Format{
+				&format.H265{
+					PayloadTyp: 96,
+					VPS:        codec.VPS,
+					SPS:        codec.SPS,
+					PPS:        codec.PPS,
+				},
+			}
+		case *fmp4.CodecMPEG4Audio:
+			media.Type = description.MediaTypeAudio
+			media.Formats = []format.Format{
+				&format.MPEG4Audio{
+					PayloadTyp:       96,
+					SizeLength:       13,
+					IndexLength:      3,
+					IndexDeltaLength: 3,
+					Config:           &codec.Config,
+				},
+			}
+		default:
+			media.Type = description.MediaTypeVideo
+		}
+		desc.Medias = append(desc.Medias, media)
+	}
+
+	_, err = path.StartPublisher(defs.PathStartPublisherReq{
+		Author:             session,
+		Desc:               desc,
+		GenerateRTPPackets: true,
+	})
+	if err != nil {
+		s.playbackMutex.Lock()
+		delete(s.playbackSessions, sessionID)
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to start publisher: %w", err))
+		return
+	}
+
+	// Return session information
+	ctx.JSON(http.StatusOK, gin.H{
+		"sessionId":       sessionID,
+		"sourcePath":      sourcePath,
+		"playbackPath":    playbackPath,
+		"startTime":       startTime,
+		"endTime":         endTime,
+		"status":          session.status,
+		"currentPosition": 0,
+		"playbackSpeed":   1.0,
+	})
+}
+
+// onStop handles the stop playback request.
+func (s *Server) onStop(ctx *gin.Context) {
+	// Parse session ID
+	sessionID := ctx.PostForm("sessionId")
+	if sessionID == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing sessionId"))
+		return
+	}
+
+	// Find session
+	s.playbackMutex.Lock()
+	session, ok := s.playbackSessions[sessionID]
+	if !ok {
+		s.playbackMutex.Unlock()
+		s.writeError(ctx, http.StatusNotFound, fmt.Errorf("session not found"))
+		return
+	}
+
+	// Remove session from map
+	delete(s.playbackSessions, sessionID)
+	s.playbackMutex.Unlock()
+
+	// Stop playback
+	close(session.done)
+
+	// Remove publisher
+	if session.path != nil {
+		session.path.RemovePublisher(defs.PathRemovePublisherReq{Author: session})
+	}
+
+	// Return success
+	ctx.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"sessionId": sessionID,
+	})
+}
+
+// onControl handles the playback control request.
+func (s *Server) onControl(ctx *gin.Context) {
+	// Parse session ID
+	sessionID := ctx.PostForm("sessionId")
+	if sessionID == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing sessionId"))
+		return
+	}
+
+	// Find session
+	s.playbackMutex.RLock()
+	session, ok := s.playbackSessions[sessionID]
+	if !ok {
+		s.playbackMutex.RUnlock()
+		s.writeError(ctx, http.StatusNotFound, fmt.Errorf("session not found"))
+		return
+	}
+	s.playbackMutex.RUnlock()
+
+	// Parse control parameters
+	seekPosStr := ctx.PostForm("seekPosition")
+	speedStr := ctx.PostForm("playbackSpeed")
+
+	// Handle seek
+	if seekPosStr != "" {
+		seekPos, err := time.ParseDuration(seekPosStr)
+		if err != nil {
+			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid seekPosition: %w", err))
+			return
+		}
+		session.currentPosition = seekPos
+
+		// Restart playback from new position
+		go session.playback()
+	}
+
+	// Handle playback speed
+	if speedStr != "" {
+		speed, err := strconv.ParseFloat(speedStr, 64)
+		if err != nil {
+			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid playbackSpeed: %w", err))
+			return
+		}
+		if speed <= 0 {
+			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("playbackSpeed must be positive"))
+			return
+		}
+		session.playbackSpeed = speed
+	}
+
+	// Return current status
+	ctx.JSON(http.StatusOK, gin.H{
+		"sessionId":       sessionID,
+		"status":          session.status,
+		"currentPosition": session.currentPosition,
+		"playbackSpeed":   session.playbackSpeed,
+	})
 }

@@ -147,7 +147,7 @@ func (s *Server) onGet(ctx *gin.Context) {
 		return
 	}
 
-	pathConf, err := s.safeFindPathConf(pathName)
+	pathConf, _, err := s.safeFindPathConf(pathName)
 	if err != nil {
 		s.writeError(ctx, http.StatusBadRequest, err)
 		return
