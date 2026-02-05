@@ -337,27 +337,6 @@ func (p *Core) createResources(initial bool) error {
 		p.recordCleaner.Initialize()
 	}
 
-	if p.conf.Playback &&
-		p.playbackServer == nil {
-		i := &playback.Server{
-			Address:        p.conf.PlaybackAddress,
-			Encryption:     p.conf.PlaybackEncryption,
-			ServerKey:      p.conf.PlaybackServerKey,
-			ServerCert:     p.conf.PlaybackServerCert,
-			AllowOrigin:    p.conf.PlaybackAllowOrigin,
-			TrustedProxies: p.conf.PlaybackTrustedProxies,
-			ReadTimeout:    p.conf.ReadTimeout,
-			PathConfs:      p.conf.Paths,
-			AuthManager:    p.authManager,
-			Parent:         p,
-		}
-		err = i.Initialize()
-		if err != nil {
-			return err
-		}
-		p.playbackServer = i
-	}
-
 	if p.pathManager == nil {
 		p.pathManager = &pathManager{
 			logLevel:          p.conf.LogLevel,
@@ -373,6 +352,28 @@ func (p *Core) createResources(initial bool) error {
 			parent:            p,
 		}
 		p.pathManager.initialize()
+	}
+
+	if p.conf.Playback &&
+		p.playbackServer == nil {
+		i := &playback.Server{
+			Address:        p.conf.PlaybackAddress,
+			Encryption:     p.conf.PlaybackEncryption,
+			ServerKey:      p.conf.PlaybackServerKey,
+			ServerCert:     p.conf.PlaybackServerCert,
+			AllowOrigin:    p.conf.PlaybackAllowOrigin,
+			TrustedProxies: p.conf.PlaybackTrustedProxies,
+			ReadTimeout:    p.conf.ReadTimeout,
+			PathConfs:      p.conf.Paths,
+			AuthManager:    p.authManager,
+			PathManager:    p.pathManager,
+			Parent:         p,
+		}
+		err = i.Initialize()
+		if err != nil {
+			return err
+		}
+		p.playbackServer = i
 	}
 
 	if p.conf.RTSP &&

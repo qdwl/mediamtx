@@ -351,7 +351,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		desc.Medias = append(desc.Medias, media)
 	}
 
-	_, err = path.StartPublisher(defs.PathStartPublisherReq{
+	stream, err := path.StartPublisher(defs.PathStartPublisherReq{
 		Author:             session,
 		Desc:               desc,
 		GenerateRTPPackets: true,
@@ -363,6 +363,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to start publisher: %w", err))
 		return
 	}
+	session.StartReadFile(stream)
 
 	// Return session information
 	ctx.JSON(http.StatusOK, gin.H{
