@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
@@ -38,6 +39,7 @@ type muxerStream struct {
 	baseDTS       int64
 	baseTime      time.Time
 	baseSet       bool
+	done          chan struct{}
 }
 
 // Log implements logger.Writer.
@@ -50,6 +52,13 @@ func (m *muxerStream) writeInit(init *fmp4.Init) {
 }
 
 func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bool, payloadSize uint32, getPayload func() ([]byte, error)) error {
+	// Check if playback is stopped
+	select {
+	case <-m.done:
+		return fmt.Errorf("playback stopped")
+	default:
+	}
+
 	m.Log(logger.Error, "writeSample dts:%d ptsOffset:%d\n", dts, ptsOffset)
 
 	// Get payload

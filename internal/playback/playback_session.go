@@ -30,7 +30,13 @@ type playbackSession struct {
 
 // Close implements defs.Publisher.
 func (ps *playbackSession) Close() {
+	// Close the done channel to signal playback stop
 	close(ps.done)
+
+	// Update session status
+	ps.status = "stopped"
+
+	ps.Log(logger.Info, "playback session stopped")
 }
 
 // Log implements logger.Writer.
@@ -93,6 +99,10 @@ func (ps *playbackSession) processSegments(segments []*recordstore.Segment, init
 		file.Close()
 
 		if err != nil {
+			// If playback was stopped, exit immediately
+			if err.Error() == "playback stopped" {
+				return
+			}
 			continue
 		}
 	}
@@ -137,6 +147,7 @@ func (ps *playbackSession) playback() {
 		stream:        ps.stream,
 		tracks:        ps.tracks,
 		playbackSpeed: ps.playbackSpeed,
+		done:          ps.done,
 	}
 
 	// Process segments and write samples
