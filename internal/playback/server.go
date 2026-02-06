@@ -13,6 +13,7 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/pmp4"
 
 	"github.com/bluenviron/mediamtx/internal/auth"
 	"github.com/bluenviron/mediamtx/internal/conf"
@@ -211,12 +212,8 @@ func (s *Server) onStart(ctx *gin.Context) {
 		return
 	}
 
-	// Generate session ID
-	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
-
 	// Create playback session
 	session := &playbackSession{
-		id:              sessionID,
 		sourcePath:      sourcePath,
 		playbackPath:    playbackPath,
 		startTime:       startTime,
@@ -230,7 +227,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 
 	// Add session to map
 	s.playbackMutex.Lock()
-	s.playbackSessions[sessionID] = session
+	s.playbackSessions[playbackPath] = session
 	s.playbackMutex.Unlock()
 
 	// Create access request
@@ -249,7 +246,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 	})
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to add publisher: %w", err))
 		return
@@ -266,7 +263,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 	pathConf, _, err := s.safeFindPathConf(session.sourcePath)
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to find path configuration: %w", err))
 		return
@@ -276,7 +273,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 	segments, err := recordstore.FindSegments(pathConf, session.sourcePath, &session.startTime, &session.endTime)
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to find recording segments: %w", err))
 		return
@@ -284,7 +281,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 
 	if len(segments) == 0 {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("no recording segments found"))
 		return
@@ -294,7 +291,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 	file, err := os.Open(segments[0].Fpath)
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to open segment file: %w", err))
 		return
@@ -303,12 +300,13 @@ func (s *Server) onStart(ctx *gin.Context) {
 	file.Close()
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to read init data: %w", err))
 		return
 	}
 
+	var tracks []*muxerStreamTrack
 	// Create stream description from init data
 	desc = &description.Session{}
 	for _, track := range init.Tracks {
@@ -324,6 +322,16 @@ func (s *Server) onStart(ctx *gin.Context) {
 					PPS:               codec.PPS,
 				},
 			}
+			track := &muxerStreamTrack{
+				Track: pmp4.Track{
+					ID:        track.ID,
+					TimeScale: track.TimeScale,
+					Codec:     track.Codec,
+				},
+				media: media,
+			}
+			tracks = append(tracks, track)
+
 		case *fmp4.CodecH265:
 			media.Type = description.MediaTypeVideo
 			media.Formats = []format.Format{
@@ -334,6 +342,16 @@ func (s *Server) onStart(ctx *gin.Context) {
 					PPS:        codec.PPS,
 				},
 			}
+			track := &muxerStreamTrack{
+				Track: pmp4.Track{
+					ID:        track.ID,
+					TimeScale: track.TimeScale,
+					Codec:     track.Codec,
+				},
+				media: media,
+			}
+			tracks = append(tracks, track)
+
 		case *fmp4.CodecMPEG4Audio:
 			media.Type = description.MediaTypeAudio
 			media.Formats = []format.Format{
@@ -345,8 +363,17 @@ func (s *Server) onStart(ctx *gin.Context) {
 					Config:           &codec.Config,
 				},
 			}
+			track := &muxerStreamTrack{
+				Track: pmp4.Track{
+					ID:        track.ID,
+					TimeScale: track.TimeScale,
+					Codec:     track.Codec,
+				},
+				media: media,
+			}
+			tracks = append(tracks, track)
+
 		default:
-			media.Type = description.MediaTypeVideo
 		}
 		desc.Medias = append(desc.Medias, media)
 	}
@@ -358,16 +385,15 @@ func (s *Server) onStart(ctx *gin.Context) {
 	})
 	if err != nil {
 		s.playbackMutex.Lock()
-		delete(s.playbackSessions, sessionID)
+		delete(s.playbackSessions, playbackPath)
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to start publisher: %w", err))
 		return
 	}
-	session.StartReadFile(stream)
+	session.StartPlayback(stream, tracks)
 
 	// Return session information
 	ctx.JSON(http.StatusOK, gin.H{
-		"sessionId":       sessionID,
 		"sourcePath":      sourcePath,
 		"playbackPath":    playbackPath,
 		"startTime":       startTime,
@@ -380,16 +406,16 @@ func (s *Server) onStart(ctx *gin.Context) {
 
 // onStop handles the stop playback request.
 func (s *Server) onStop(ctx *gin.Context) {
-	// Parse session ID
-	sessionID := ctx.PostForm("sessionId")
-	if sessionID == "" {
-		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing sessionId"))
+	// Parse playbackPath ID
+	playbackPath := ctx.PostForm("playbackPath")
+	if playbackPath == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing playbackPath"))
 		return
 	}
 
 	// Find session
 	s.playbackMutex.Lock()
-	session, ok := s.playbackSessions[sessionID]
+	session, ok := s.playbackSessions[playbackPath]
 	if !ok {
 		s.playbackMutex.Unlock()
 		s.writeError(ctx, http.StatusNotFound, fmt.Errorf("session not found"))
@@ -397,11 +423,11 @@ func (s *Server) onStop(ctx *gin.Context) {
 	}
 
 	// Remove session from map
-	delete(s.playbackSessions, sessionID)
+	delete(s.playbackSessions, playbackPath)
 	s.playbackMutex.Unlock()
 
 	// Stop playback
-	close(session.done)
+	session.Close()
 
 	// Remove publisher
 	if session.path != nil {
@@ -410,23 +436,23 @@ func (s *Server) onStop(ctx *gin.Context) {
 
 	// Return success
 	ctx.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"sessionId": sessionID,
+		"success":      true,
+		"playbackPath": playbackPath,
 	})
 }
 
 // onControl handles the playback control request.
 func (s *Server) onControl(ctx *gin.Context) {
-	// Parse session ID
-	sessionID := ctx.PostForm("sessionId")
-	if sessionID == "" {
-		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing sessionId"))
+	// Parse playbackPath ID
+	playbackPath := ctx.PostForm("playbackPath")
+	if playbackPath == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing playbackPath"))
 		return
 	}
 
 	// Find session
 	s.playbackMutex.RLock()
-	session, ok := s.playbackSessions[sessionID]
+	session, ok := s.playbackSessions[playbackPath]
 	if !ok {
 		s.playbackMutex.RUnlock()
 		s.writeError(ctx, http.StatusNotFound, fmt.Errorf("session not found"))
@@ -467,8 +493,8 @@ func (s *Server) onControl(ctx *gin.Context) {
 
 	// Return current status
 	ctx.JSON(http.StatusOK, gin.H{
-		"sessionId":       sessionID,
 		"status":          session.status,
+		"playbackPath":    playbackPath,
 		"currentPosition": session.currentPosition,
 		"playbackSpeed":   session.playbackSpeed,
 	})

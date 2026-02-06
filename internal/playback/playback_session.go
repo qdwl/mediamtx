@@ -14,7 +14,6 @@ import (
 
 // playbackSession represents a playback session.
 type playbackSession struct {
-	id              string
 	sourcePath      string
 	playbackPath    string
 	startTime       time.Time
@@ -24,6 +23,7 @@ type playbackSession struct {
 	playbackSpeed   float64
 	path            defs.Path
 	stream          *stream.Stream
+	tracks          []*muxerStreamTrack
 	done            chan struct{}
 	server          *Server
 }
@@ -35,19 +35,20 @@ func (ps *playbackSession) Close() {
 
 // Log implements logger.Writer.
 func (ps *playbackSession) Log(level logger.Level, format string, args ...interface{}) {
-	ps.server.Log(level, "[session "+ps.id+"] "+format, args...)
+	ps.server.Log(level, "[session "+ps.playbackPath+"] "+format, args...)
 }
 
 // APISourceDescribe implements Source.
 func (ps *playbackSession) APISourceDescribe() defs.APIPathSourceOrReader {
 	return defs.APIPathSourceOrReader{
 		Type: "playback",
-		ID:   ps.id,
+		ID:   ps.playbackPath,
 	}
 }
 
-func (ps *playbackSession) StartReadFile(s *stream.Stream) {
+func (ps *playbackSession) StartPlayback(s *stream.Stream, tracks []*muxerStreamTrack) {
 	ps.stream = s
+	ps.tracks = tracks
 	go ps.playback()
 }
 
@@ -132,11 +133,11 @@ func (ps *playbackSession) playback() {
 
 	// Create muxer to write samples to stream
 	muxer := &muxerStream{
-		Parent:        ps.server,
+		parent:        ps.server,
 		stream:        ps.stream,
+		tracks:        ps.tracks,
 		playbackSpeed: ps.playbackSpeed,
 	}
-	muxer.writeInit(init)
 
 	// Process segments and write samples
 	ps.processSegments(segments, init, muxer)
