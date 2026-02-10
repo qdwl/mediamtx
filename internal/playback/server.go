@@ -221,7 +221,6 @@ func (s *Server) onStart(ctx *gin.Context) {
 		status:          "starting",
 		currentPosition: 0,
 		playbackSpeed:   1.0,
-		done:            make(chan struct{}),
 		server:          s,
 	}
 
@@ -464,19 +463,6 @@ func (s *Server) onControl(ctx *gin.Context) {
 	seekPosStr := ctx.PostForm("seekPosition")
 	speedStr := ctx.PostForm("playbackSpeed")
 
-	// Handle seek
-	if seekPosStr != "" {
-		seekPos, err := time.ParseDuration(seekPosStr)
-		if err != nil {
-			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid seekPosition: %w", err))
-			return
-		}
-		session.currentPosition = seekPos
-
-		// Restart playback from new position
-		go session.playback()
-	}
-
 	// Handle playback speed
 	if speedStr != "" {
 		speed, err := strconv.ParseFloat(speedStr, 64)
@@ -488,7 +474,32 @@ func (s *Server) onControl(ctx *gin.Context) {
 			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("playbackSpeed must be positive"))
 			return
 		}
-		session.playbackSpeed = speed
+		session.PlaybackSpeed(speed)
+		session.Log(logger.Info, "playback speed %f", session.playbackSpeed)
+
+	}
+
+	// Handle seek
+	if seekPosStr != "" {
+		seekPos, err := time.ParseDuration(seekPosStr)
+		if err != nil {
+			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid seekPosition: %w", err))
+			return
+		}
+
+		// Stop current playback
+		session.Close()
+
+		// Update seek position
+		session.currentPosition = seekPos
+		session.status = "seeking"
+
+		// Restart playback from new position
+		go func() {
+			session.status = "playing"
+			session.playback()
+		}()
+		session.Log(logger.Info, "seek to position %v", seekPos)
 	}
 
 	// Return current status

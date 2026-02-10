@@ -2,6 +2,7 @@ package playback
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
@@ -31,15 +32,20 @@ func findStreamTrack(tracks []*muxerStreamTrack, id int) *muxerStreamTrack {
 
 // muxerStream is a muxer that writes samples to a stream.
 type muxerStream struct {
-	parent        logger.Writer
-	stream        *stream.Stream
-	tracks        []*muxerStreamTrack
-	curTrack      *muxerStreamTrack
-	playbackSpeed float64
-	baseDTS       int64
-	baseTime      time.Time
-	baseSet       bool
-	done          chan struct{}
+	parent            logger.Writer
+	stream            *stream.Stream
+	tracks            []*muxerStreamTrack
+	curTrack          *muxerStreamTrack
+	playbackSpeed     float64
+	lastPlaybackSpeed float64
+	baseDTS           int64
+	baseTime          time.Time
+	baseSet           bool
+	basePTS           int64
+	basePTSTime       time.Time
+	basePTSSet        bool
+	wg                sync.WaitGroup
+	done              chan struct{}
 }
 
 // Log implements logger.Writer.
@@ -47,19 +53,31 @@ func (m *muxerStream) Log(level logger.Level, format string, args ...interface{}
 	m.parent.Log(level, "[muxerStream] "+format, args...)
 }
 
+func (m *muxerStream) Close() {
+	close(m.done)
+	m.wg.Wait()
+}
+
 func (m *muxerStream) writeInit(init *fmp4.Init) {
 
 }
 
 func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bool, payloadSize uint32, getPayload func() ([]byte, error)) error {
+	m.wg.Add(1)
+	defer m.wg.Done()
+
 	// Check if playback is stopped
 	select {
 	case <-m.done:
+		m.Log(logger.Info, "write sample terminate")
 		return fmt.Errorf("playback stopped")
 	default:
 	}
 
-	m.Log(logger.Error, "writeSample dts:%d ptsOffset:%d\n", dts, ptsOffset)
+	// Handle GOPs before GOP of first frame when not starting from beginning
+	if dts < 0 {
+		return nil
+	}
 
 	// Get payload
 	data, err := getPayload()
@@ -68,33 +86,62 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 		return err
 	}
 
-	m.Log(logger.Info, "stream %+v, curTrack %+v, curTrack media %+v",
-		m.stream, m.curTrack, m.curTrack.media)
-
-	// Calculate PTS
-	pts := dts + int64(ptsOffset)
-
 	// Apply playback speed control
 	if !m.baseSet {
 		// Set base time for the first sample
 		m.baseDTS = dts
 		m.baseTime = time.Now()
 		m.baseSet = true
+		m.lastPlaybackSpeed = m.playbackSpeed
 	} else {
+		// Check if playback speed has changed
+		if m.playbackSpeed != m.lastPlaybackSpeed {
+			// Adjust base time to account for speed change
+			// Calculate how much real time has passed since the last baseTime
+			timePassed := time.Since(m.baseTime)
+			// Calculate how much media time has passed
+			mediaTimePassed := int64(float64(timePassed.Milliseconds()) * float64(90) * m.lastPlaybackSpeed)
+			// Update baseDTS and baseTime
+			m.baseDTS += mediaTimePassed
+			m.baseTime = time.Now()
+			m.Log(logger.Info, "playback speed changed from %f to %f, adjusting base time, base dts %d",
+				m.lastPlaybackSpeed, m.playbackSpeed, m.baseDTS)
+
+			m.lastPlaybackSpeed = m.playbackSpeed
+		}
+
 		// Calculate expected real time for current sample
+		// Use absolute time difference to handle non-monotonic dts
 		timeDiff := dts - m.baseDTS
-		m.Log(logger.Info, "+++++++time diff %d", timeDiff)
+		// Only proceed if timeDiff is positive
+		// If dts is not monotonic, skip time control
 		if timeDiff > 0 {
 			expectedTime := m.baseTime.Add(time.Duration(float64(timeDiff)/m.playbackSpeed/90) * time.Millisecond)
 			// Calculate actual time passed
 			actualTime := time.Now()
-			m.Log(logger.Info, "----------actualTime %d, expectedTime %d", actualTime.UnixMilli(), expectedTime.UnixMilli())
 			// If actual time is less than expected time, sleep
 			if actualTime.Before(expectedTime) {
-				m.Log(logger.Info, "++++++++ actualTime %d before expected time %d", actualTime.UnixMilli(), expectedTime.UnixMilli())
+				m.Log(logger.Info, "++++++++ actualTime %d before expected time %d, diff %d, dts:%d, baseDts:%d",
+					actualTime.UnixMilli(), expectedTime.UnixMilli(), timeDiff, dts, m.baseDTS)
 				time.Sleep(expectedTime.Sub(actualTime))
 			}
+		} else if timeDiff < 0 {
+			// dts is not monotonic, reset base time
+			m.Log(logger.Info, "dts is not monotonic, resetting base time: %d -> %d", m.baseDTS, dts)
+			m.baseDTS = dts
+			m.baseTime = time.Now()
+			m.lastPlaybackSpeed = m.playbackSpeed
 		}
+	}
+
+	if !m.basePTSSet {
+		m.basePTSTime = time.Now()
+		m.basePTS = dts + int64(ptsOffset)
+		m.basePTSSet = true
+	} else {
+		timeSince := time.Since(m.basePTSTime)
+		m.basePTS = m.basePTS + int64(timeSince.Milliseconds()*90)
+		m.basePTSTime = time.Now()
 	}
 
 	// Write sample to stream
@@ -111,13 +158,14 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 			u := &unit.H264{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
 				AU: au,
 			}
 
 			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
+			m.Log(logger.Info, "write h264 pts:%d", u.PTS)
 
 		case *format.H265:
 			var au h264.AVCC
@@ -130,12 +178,10 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 			u := &unit.H265{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
 				AU: au,
 			}
-
-			m.Log(logger.Error, "send h265 track pts:%d\n", pts)
 
 			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
@@ -144,12 +190,12 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 			u := &unit.MPEG4Audio{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
 				AUs: [][]byte{data},
 			}
 
-			m.Log(logger.Error, "send aac track pts:%d\n", pts)
+			m.Log(logger.Error, "send aac track pts:%d\n", m.basePTS)
 
 			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
@@ -173,16 +219,14 @@ func (m *muxerStream) flush() error {
 func (m *muxerStream) setTrack(trackID int) {
 	// Set current track
 	m.curTrack = findStreamTrack(m.tracks, trackID)
-	m.Log(logger.Info, "set track %d curTrack %+v", trackID, m.curTrack)
-	for _, val := range m.tracks {
-		m.Log(logger.Info, "track %+v", val)
-	}
 }
 
-// // resetTimeBase resets the time base for all tracks.
-// // This should be called when a seek operation occurs.
-// func (m *muxerStream) resetTimeBase() {
-// 	m.baseSet = false
-// 	m.baseDTS = 0
-// 	m.baseTime = time.Time{}
-// }
+// resetTimeBase resets the time base for all tracks.
+// This should be called when a seek operation occurs.
+func (m *muxerStream) resetTimeBase() {
+	m.baseSet = false
+	m.baseDTS = 0
+	m.baseTime = time.Time{}
+	m.lastPlaybackSpeed = m.playbackSpeed
+	m.done = make(chan struct{})
+}
