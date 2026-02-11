@@ -471,49 +471,51 @@ func (s *Server) onControl(ctx *gin.Context) {
 			session.Pause()
 		case "resume":
 			session.Resume()
+		case "play":
+			if session.IsPaused() {
+				session.Resume()
+			}
+			// Handle playback speed
+			if speedStr != "" {
+				speed, err := strconv.ParseFloat(speedStr, 64)
+				if err != nil {
+					s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid playbackSpeed: %w", err))
+					return
+				}
+				if speed <= 0 {
+					s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("playbackSpeed must be positive"))
+					return
+				}
+				session.PlaybackSpeed(speed)
+				session.Log(logger.Info, "playback speed %f", session.playbackSpeed)
+			}
+
+			// Handle seek
+			if seekPosStr != "" {
+				seekPos, err := time.ParseDuration(seekPosStr)
+				if err != nil {
+					s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid seekPosition: %w", err))
+					return
+				}
+
+				// Stop current playback
+				session.Close()
+
+				// Update seek position
+				session.currentPosition = seekPos
+				session.status = "seeking"
+
+				// Restart playback from new position
+				go func() {
+					session.status = "playing"
+					session.playback()
+				}()
+				session.Log(logger.Info, "seek to position %v", seekPos)
+			}
 		default:
 			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid command: %s", playbackCmd))
 			return
 		}
-	}
-
-	// Handle playback speed
-	if speedStr != "" {
-		speed, err := strconv.ParseFloat(speedStr, 64)
-		if err != nil {
-			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid playbackSpeed: %w", err))
-			return
-		}
-		if speed <= 0 {
-			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("playbackSpeed must be positive"))
-			return
-		}
-		session.PlaybackSpeed(speed)
-		session.Log(logger.Info, "playback speed %f", session.playbackSpeed)
-
-	}
-
-	// Handle seek
-	if seekPosStr != "" {
-		seekPos, err := time.ParseDuration(seekPosStr)
-		if err != nil {
-			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid seekPosition: %w", err))
-			return
-		}
-
-		// Stop current playback
-		session.Close()
-
-		// Update seek position
-		session.currentPosition = seekPos
-		session.status = "seeking"
-
-		// Restart playback from new position
-		go func() {
-			session.status = "playing"
-			session.playback()
-		}()
-		session.Log(logger.Info, "seek to position %v", seekPos)
 	}
 
 	// Return current status

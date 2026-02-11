@@ -119,38 +119,52 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 		// Check if playback speed has changed
 		if m.playbackSpeed != m.lastPlaybackSpeed {
 			// Adjust base time to account for speed change
+			// Calculate how much real time has passed since the last baseTime
 			timePassed := time.Since(m.baseTime)
-			mediaTimePassed := int64(timePassed.Seconds() * float64(90) * m.lastPlaybackSpeed)
+			// Calculate how much media time has passed
+			mediaTimePassed := int64(float64(timePassed.Milliseconds()) * float64(90) * m.lastPlaybackSpeed)
+			// Update baseDTS and baseTime
 			m.baseDTS += mediaTimePassed
 			m.baseTime = time.Now()
+			m.Log(logger.Info, "playback speed changed from %f to %f, adjusting base time, base dts %d",
+				m.lastPlaybackSpeed, m.playbackSpeed, m.baseDTS)
+
 			m.lastPlaybackSpeed = m.playbackSpeed
 		}
 
-		// Calculate expected time
+		// Calculate expected real time for current sample
+		// Use absolute time difference to handle non-monotonic dts
 		timeDiff := dts - m.baseDTS
+		// Only proceed if timeDiff is positive
+		// If dts is not monotonic, skip time control
 		if timeDiff > 0 {
 			expectedTime := m.baseTime.Add(time.Duration(float64(timeDiff)/m.playbackSpeed/90) * time.Millisecond)
+			// Calculate actual time passed
 			actualTime := time.Now()
+			// If actual time is less than expected time, sleep
 			if actualTime.Before(expectedTime) {
+				m.Log(logger.Info, "++++++++ actualTime %d before expected time %d, diff %d, dts:%d, baseDts:%d",
+					actualTime.UnixMilli(), expectedTime.UnixMilli(), timeDiff, dts, m.baseDTS)
 				time.Sleep(expectedTime.Sub(actualTime))
 			}
+		} else if timeDiff < 0 {
+			// dts is not monotonic, reset base time
+			m.Log(logger.Info, "dts is not monotonic, resetting base time: %d -> %d", m.baseDTS, dts)
+			m.baseDTS = dts
+			m.baseTime = time.Now()
+			m.lastPlaybackSpeed = m.playbackSpeed
 		}
 	}
 
-	// Calculate adjusted PTS
-	pts := dts + int64(ptsOffset)
-
-	// Apply speed to PTS
 	if !m.basePTSSet {
-		m.basePTS = pts
 		m.basePTSTime = time.Now()
+		m.basePTS = dts + int64(ptsOffset)
 		m.basePTSSet = true
 	} else {
-		// Calculate time since base PTS
-		timeSinceBase := time.Since(m.basePTSTime)
-		// Calculate adjusted PTS based on playback speed
-		adjustedPTS := m.basePTS + int64(timeSinceBase.Seconds()*float64(90000)*m.playbackSpeed)
-		pts = adjustedPTS
+		timeSince := time.Since(m.basePTSTime)
+		m.basePTS = m.basePTS + int64(timeSince.Milliseconds()*90)
+		m.basePTSTime = time.Now()
+
 	}
 
 	// Write sample to stream
@@ -163,53 +177,51 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 				return err
 			}
 
+			// Create H264 unit
 			u := &unit.H264{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
 				AU: au,
 			}
 
+			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
+			m.Log(logger.Info, "write h264 pts:%d", u.PTS)
 
 		case *format.H265:
-			// Parse H265 NALUs from MP4 format
-			var nalus [][]byte
-			offset := 0
-			for offset < len(data) {
-				if offset+4 > len(data) {
-					break
-				}
-				naluLen := uint32(data[offset])<<24 | uint32(data[offset+1])<<16 | uint32(data[offset+2])<<8 | uint32(data[offset+3])
-				offset += 4
-				if offset+int(naluLen) > len(data) {
-					break
-				}
-				nalu := data[offset : offset+int(naluLen)]
-				nalus = append(nalus, nalu)
-				offset += int(naluLen)
+			var au h264.AVCC
+			if err := au.Unmarshal(data); err != nil {
+				m.Log(logger.Error, "write sample %v", err)
+				return err
+
 			}
 
+			// Create H264 unit
 			u := &unit.H265{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
-				AU: nalus,
+				AU: au,
 			}
 
+			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
 
 		case *format.MPEG4Audio:
 			u := &unit.MPEG4Audio{
 				Base: unit.Base{
 					NTP: time.Now(),
-					PTS: pts,
+					PTS: m.basePTS,
 				},
 				AUs: [][]byte{data},
 			}
 
+			m.Log(logger.Error, "send aac track pts:%d\n", m.basePTS)
+
+			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
 
 		default:
