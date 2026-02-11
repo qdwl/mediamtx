@@ -68,6 +68,25 @@ func (ps *playbackSession) PlaybackSpeed(speed float64) {
 	ps.muxer.playbackSpeed = speed
 }
 
+// Pause pauses playback.
+func (ps *playbackSession) Pause() {
+	ps.status = "paused"
+	ps.muxer.Pause()
+	ps.Log(logger.Info, "playback paused")
+}
+
+// Resume resumes playback.
+func (ps *playbackSession) Resume() {
+	ps.status = "playing"
+	ps.muxer.Resume()
+	ps.Log(logger.Info, "playback resumed")
+}
+
+// IsPaused returns whether playback is paused.
+func (ps *playbackSession) IsPaused() bool {
+	return ps.status == "paused" || (ps.muxer != nil && ps.muxer.IsPaused())
+}
+
 // readInitFromSegment reads the init data from a recording segment.
 func readInitFromSegment(segment *recordstore.Segment) (*fmp4.Init, error) {
 	// Open segment file

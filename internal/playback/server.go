@@ -462,6 +462,20 @@ func (s *Server) onControl(ctx *gin.Context) {
 	// Parse control parameters
 	seekPosStr := ctx.PostForm("seekPosition")
 	speedStr := ctx.PostForm("playbackSpeed")
+	playbackCmd := ctx.PostForm("command")
+
+	// Handle playback command (pause/resume)
+	if playbackCmd != "" {
+		switch playbackCmd {
+		case "pause":
+			session.Pause()
+		case "resume":
+			session.Resume()
+		default:
+			s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid command: %s", playbackCmd))
+			return
+		}
+	}
 
 	// Handle playback speed
 	if speedStr != "" {
