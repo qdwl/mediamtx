@@ -305,6 +305,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		return
 	}
 
+	// 目前仅支持回放视频
 	var tracks []*muxerStreamTrack
 	// Create stream description from init data
 	desc = &description.Session{}

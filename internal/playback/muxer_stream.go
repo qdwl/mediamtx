@@ -82,6 +82,11 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 	default:
 	}
 
+	//目前仅支持回放视频
+	if m.curTrack == nil || m.curTrack.media.Type != description.MediaTypeVideo {
+		return nil
+	}
+
 	// Check if playback is paused
 	m.pauseMutex.Lock()
 	for m.paused {
