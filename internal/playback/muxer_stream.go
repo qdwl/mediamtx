@@ -44,6 +44,8 @@ type muxerStream struct {
 	basePTS           int64
 	basePTSTime       time.Time
 	basePTSSet        bool
+	dropUntilSync     bool
+	pauseStart        time.Time
 	wg                sync.WaitGroup
 	done              chan struct{}
 	paused            bool
@@ -104,6 +106,14 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 	// Handle GOPs before GOP of first frame when not starting from beginning
 	if dts < 0 {
 		return nil
+	}
+
+	// After seek, drop non-sync samples until the first sync sample (IDR/CRA).
+	if m.dropUntilSync && isNonSyncSample {
+		return nil
+	}
+	if m.dropUntilSync && !isNonSyncSample {
+		m.dropUntilSync = false
 	}
 
 	// Get payload
@@ -260,6 +270,8 @@ func (m *muxerStream) resetTimeBase() {
 	m.done = make(chan struct{})
 	m.paused = false
 	m.pauseCond = sync.NewCond(&m.pauseMutex)
+	m.dropUntilSync = true
+	m.pauseStart = time.Time{}
 }
 
 // Pause pauses playback.
@@ -267,6 +279,7 @@ func (m *muxerStream) Pause() {
 	m.pauseMutex.Lock()
 	defer m.pauseMutex.Unlock()
 	m.paused = true
+	m.pauseStart = time.Now()
 	m.Log(logger.Info, "playback paused")
 }
 
@@ -275,6 +288,16 @@ func (m *muxerStream) Resume() {
 	m.pauseMutex.Lock()
 	defer m.pauseMutex.Unlock()
 	m.paused = false
+	if !m.pauseStart.IsZero() {
+		delta := time.Since(m.pauseStart)
+		if m.baseSet {
+			m.baseTime = m.baseTime.Add(delta)
+		}
+		if m.basePTSSet {
+			m.basePTSTime = m.basePTSTime.Add(delta)
+		}
+		m.pauseStart = time.Time{}
+	}
 	m.pauseCond.Broadcast()
 	m.Log(logger.Info, "playback resumed")
 }
