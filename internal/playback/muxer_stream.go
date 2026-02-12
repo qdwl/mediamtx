@@ -3,6 +3,7 @@ package playback
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
@@ -46,6 +47,8 @@ type muxerStream struct {
 	basePTSSet        bool
 	dropUntilSync     bool
 	pauseStart        time.Time
+	closeOnce         sync.Once
+	stopped           atomic.Bool
 	wg                sync.WaitGroup
 	done              chan struct{}
 	paused            bool
@@ -59,12 +62,14 @@ func (m *muxerStream) Log(level logger.Level, format string, args ...interface{}
 }
 
 func (m *muxerStream) Close() {
+	m.stopped.Store(true)
+	m.closeOnce.Do(func() { close(m.done) })
+
 	m.pauseMutex.Lock()
 	m.paused = false
 	m.pauseCond.Broadcast()
 	m.pauseMutex.Unlock()
 
-	close(m.done)
 	m.wg.Wait()
 }
 
@@ -73,6 +78,9 @@ func (m *muxerStream) writeInit(init *fmp4.Init) {
 }
 
 func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bool, payloadSize uint32, getPayload func() ([]byte, error)) error {
+	if m.stopped.Load() {
+		return fmt.Errorf("playback stopped")
+	}
 	m.wg.Add(1)
 	defer m.wg.Done()
 
@@ -103,6 +111,14 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 	}
 	m.pauseMutex.Unlock()
 
+	// Check again after unpausing
+	select {
+	case <-m.done:
+		m.Log(logger.Info, "write sample terminate")
+		return fmt.Errorf("playback stopped")
+	default:
+	}
+
 	// Handle GOPs before GOP of first frame when not starting from beginning
 	if dts < 0 {
 		return nil
@@ -121,6 +137,14 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 	if err != nil {
 		m.Log(logger.Error, "get payload err %v\n", err)
 		return err
+	}
+
+	// If stopped while reading payload, discard sample
+	select {
+	case <-m.done:
+		m.Log(logger.Info, "write sample terminate")
+		return fmt.Errorf("playback stopped")
+	default:
 	}
 
 	// Apply playback speed control
@@ -184,6 +208,12 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 
 	// Write sample to stream
 	if m.stream != nil && m.curTrack != nil && m.curTrack.media != nil {
+		select {
+		case <-m.done:
+			m.Log(logger.Info, "write sample terminate")
+			return fmt.Errorf("playback stopped")
+		default:
+		}
 		switch m.curTrack.media.Formats[0].(type) {
 		case *format.H264:
 			var au h264.AVCC
@@ -267,7 +297,9 @@ func (m *muxerStream) resetTimeBase() {
 	m.baseDTS = 0
 	m.baseTime = time.Time{}
 	m.lastPlaybackSpeed = m.playbackSpeed
+	m.stopped.Store(false)
 	m.done = make(chan struct{})
+	m.closeOnce = sync.Once{}
 	m.paused = false
 	m.pauseCond = sync.NewCond(&m.pauseMutex)
 	m.dropUntilSync = true
