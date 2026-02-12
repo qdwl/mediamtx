@@ -121,11 +121,23 @@ func concatenateSegments(parsed []*parsedSegment) []listEntry {
 	// }
 
 	for _, parsed := range parsed {
+		start := parsed.start
+		end := parsed.start.Add(parsed.duration)
+
+		// if segment start contains milliseconds, align bounds to seconds.
+		if parsed.start.Nanosecond()/int(time.Millisecond) > 0 {
+			start = parsed.start.Truncate(time.Second).Add(time.Second)
+			end = end.Truncate(time.Second)
+			if end.Before(start) {
+				end = start
+			}
+		}
+
 		out = append(out, listEntry{
-			Start:    parsed.start,
-			End:      parsed.start.Add(parsed.duration),
+			Start:    start,
+			End:      end,
 			FileSize: parsed.fileSize,
-			Duration: listEntryDuration(parsed.duration),
+			Duration: listEntryDuration(end.Sub(start)),
 		})
 	}
 

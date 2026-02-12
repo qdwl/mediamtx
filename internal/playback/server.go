@@ -205,6 +205,9 @@ func (s *Server) onStart(ctx *gin.Context) {
 		return
 	}
 
+	s.Log(logger.Info, "start playback sourcePath %s, playbackPath %s startTime %s endTime %s",
+		sourcePath, playbackPath, startTimeStr, endTimeStr)
+
 	// Find path configuration
 	_, _, err = s.safeFindPathConf(sourcePath)
 	if err != nil {
@@ -394,6 +397,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 
 	// Return session information
 	ctx.JSON(http.StatusOK, gin.H{
+		"success":         true,
 		"sourcePath":      sourcePath,
 		"playbackPath":    playbackPath,
 		"startTime":       startTime,
@@ -472,7 +476,7 @@ func (s *Server) onControl(ctx *gin.Context) {
 			session.Pause()
 		case "resume":
 			session.Resume()
-		case "play":
+		case "seek":
 			if session.IsPaused() {
 				session.Resume()
 			}
@@ -521,6 +525,7 @@ func (s *Server) onControl(ctx *gin.Context) {
 
 	// Return current status
 	ctx.JSON(http.StatusOK, gin.H{
+		"success":         true,
 		"status":          session.status,
 		"playbackPath":    playbackPath,
 		"currentPosition": session.currentPosition,
