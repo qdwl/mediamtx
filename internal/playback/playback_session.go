@@ -197,15 +197,20 @@ func (ps *playbackSession) processSegments(segments []*recordstore.Segment, init
 			continue
 		}
 
+		segmentStartOffset := time.Duration(0)
+		if !firstSegmentProcessed {
+			segmentStartOffset = segmentOffset
+		}
+
 		_, err = segmentFMP4SeekAndMuxParts(
 			file,
-			segmentOffset,
+			segmentStartOffset,
 			playDuration,
 			init,
 			muxer,
 		)
-		ps.Log(logger.Info, "processed segment %s, offset %v, duration %v, err %v",
-			segment.Fpath, segmentOffset, playDuration, err)
+		ps.Log(logger.Info, "processed segment %s, offset %v, segmentStartOffset %v duration %v, err %v",
+			segment.Fpath, segmentOffset, segmentStartOffset, playDuration, err)
 
 		file.Close()
 

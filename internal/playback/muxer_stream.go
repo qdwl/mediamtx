@@ -158,13 +158,13 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 			actualTime := time.Now()
 			// If actual time is less than expected time, sleep
 			if actualTime.Before(expectedTime) {
-				m.Log(logger.Info, "++++++++ actualTime %d before expected time %d, diff %d, dts:%d, baseDts:%d",
-					actualTime.UnixMilli(), expectedTime.UnixMilli(), timeDiff, dts, m.baseDTS)
+				// m.Log(logger.Info, "++++++++ actualTime %d before expected time %d, diff %d, dts:%d, baseDts:%d",
+				// 	actualTime.UnixMilli(), expectedTime.UnixMilli(), timeDiff, dts, m.baseDTS)
 				time.Sleep(expectedTime.Sub(actualTime))
 			}
 		} else if timeDiff < 0 {
 			// dts is not monotonic, reset base time
-			m.Log(logger.Info, "dts is not monotonic, resetting base time: %d -> %d", m.baseDTS, dts)
+			m.Log(logger.Warn, "dts is not monotonic, resetting base time: %d -> %d", m.baseDTS, dts)
 			m.baseDTS = dts
 			m.baseTime = time.Now()
 			m.lastPlaybackSpeed = m.playbackSpeed
@@ -203,7 +203,7 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 
 			// Write unit to stream
 			m.stream.WriteUnit(m.curTrack.media, m.curTrack.media.Formats[0], u)
-			m.Log(logger.Info, "write h264 pts:%d", u.PTS)
+			// m.Log(logger.Info, "write h264 pts:%d", u.PTS)
 
 		case *format.H265:
 			var au h264.AVCC
