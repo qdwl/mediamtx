@@ -2,6 +2,8 @@ package recorder
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -92,6 +94,14 @@ func jpegExtractSize(image []byte) (int, int, error) {
 	}
 }
 
+func hashHex(b []byte) string {
+	if b == nil {
+		return "nil"
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 type formatFMP4 struct {
 	ri *recorderInstance
 
@@ -125,13 +135,25 @@ func (f *formatFMP4) initialize() bool {
 		return track
 	}
 
-	updateCodecs := func() {
+	updateCodecs := func(reason string) {
 		// if codec parameters have been updated,
 		// and current segment has already written codec parameters on disk,
 		// close current segment.
 		if f.currentSegment != nil && f.currentSegment.fi != nil {
+			duration := f.currentSegment.lastDTS - f.currentSegment.startDTS
+			f.ri.Log(logger.Warn,
+				"codec parameters changed (%s), forcing segment closure path=%s duration=%v",
+				reason,
+				f.currentSegment.path,
+				duration)
 			f.currentSegment.close() //nolint:errcheck
 			f.currentSegment = nil
+		} else if f.currentSegment != nil {
+			duration := f.currentSegment.lastDTS - f.currentSegment.startDTS
+			f.ri.Log(logger.Warn,
+				"codec parameters changed (%s), segment not yet created on disk duration=%v",
+				reason,
+				duration)
 		}
 	}
 
@@ -170,7 +192,7 @@ func (f *formatFMP4) initialize() bool {
 							if h.Type == av1.OBUTypeSequenceHeader {
 								if !bytes.Equal(codec.SequenceHeader, obu) {
 									codec.SequenceHeader = obu
-									updateCodecs()
+									updateCodecs("av1 sequence header")
 								}
 								randomAccess = true
 							}
@@ -232,27 +254,27 @@ func (f *formatFMP4) initialize() bool {
 
 							if w := h.Width(); codec.Width != w {
 								codec.Width = w
-								updateCodecs()
+								updateCodecs("vp9 width")
 							}
 							if h := h.Width(); codec.Height != h {
 								codec.Height = h
-								updateCodecs()
+								updateCodecs("vp9 height")
 							}
 							if codec.Profile != h.Profile {
 								codec.Profile = h.Profile
-								updateCodecs()
+								updateCodecs("vp9 profile")
 							}
 							if codec.BitDepth != h.ColorConfig.BitDepth {
 								codec.BitDepth = h.ColorConfig.BitDepth
-								updateCodecs()
+								updateCodecs("vp9 bit depth")
 							}
 							if c := h.ChromaSubsampling(); codec.ChromaSubsampling != c {
 								codec.ChromaSubsampling = c
-								updateCodecs()
+								updateCodecs("vp9 chroma subsampling")
 							}
 							if codec.ColorRange != h.ColorConfig.ColorRange {
 								codec.ColorRange = h.ColorConfig.ColorRange
-								updateCodecs()
+								updateCodecs("vp9 color range")
 							}
 						}
 
@@ -313,19 +335,20 @@ func (f *formatFMP4) initialize() bool {
 							case h265.NALUType_VPS_NUT:
 								if !bytes.Equal(codec.VPS, nalu) {
 									codec.VPS = nalu
-									updateCodecs()
+									updateCodecs("h265 vps")
 								}
 
 							case h265.NALUType_SPS_NUT:
 								if !bytes.Equal(codec.SPS, nalu) {
+									f.ri.Log(logger.Warn, "h265 sps changed old=%s new=%s", hashHex(codec.SPS), hashHex(nalu))
 									codec.SPS = nalu
-									updateCodecs()
+									updateCodecs("h265 sps")
 								}
 
 							case h265.NALUType_PPS_NUT:
 								if !bytes.Equal(codec.PPS, nalu) {
 									codec.PPS = nalu
-									updateCodecs()
+									updateCodecs("h265 pps")
 								}
 
 							case h265.NALUType_IDR_W_RADL, h265.NALUType_IDR_N_LP, h265.NALUType_CRA_NUT:
@@ -394,14 +417,15 @@ func (f *formatFMP4) initialize() bool {
 							switch typ {
 							case h264.NALUTypeSPS:
 								if !bytes.Equal(codec.SPS, nalu) {
+									f.ri.Log(logger.Warn, "h264 sps changed old=%s new=%s", hashHex(codec.SPS), hashHex(nalu))
 									codec.SPS = nalu
-									updateCodecs()
+									updateCodecs("h264 sps")
 								}
 
 							case h264.NALUTypePPS:
 								if !bytes.Equal(codec.PPS, nalu) {
 									codec.PPS = nalu
-									updateCodecs()
+									updateCodecs("h264 pps")
 								}
 
 							case h264.NALUTypeIDR:
@@ -471,7 +495,7 @@ func (f *formatFMP4) initialize() bool {
 
 								if !bytes.Equal(codec.Config, config) {
 									codec.Config = config
-									updateCodecs()
+									updateCodecs("mpeg4video config")
 								}
 							}
 						}
@@ -524,7 +548,7 @@ func (f *formatFMP4) initialize() bool {
 
 								if !bytes.Equal(codec.Config, config) {
 									codec.Config = config
-									updateCodecs()
+									updateCodecs("mpeg1video config")
 								}
 							}
 						}
@@ -576,7 +600,7 @@ func (f *formatFMP4) initialize() bool {
 							}
 							codec.Width = width
 							codec.Height = height
-							updateCodecs()
+							updateCodecs("mjpeg size")
 						}
 
 						return track.write(&sample{
@@ -693,7 +717,7 @@ func (f *formatFMP4) initialize() bool {
 								parsed = true
 								codec.SampleRate = h.SampleRate
 								codec.ChannelCount = mpeg1audioChannelCount(h.ChannelMode)
-								updateCodecs()
+								updateCodecs("mpeg1audio config")
 							}
 
 							err = track.write(&sample{
@@ -762,7 +786,7 @@ func (f *formatFMP4) initialize() bool {
 								codec.Acmod = bsi.Acmod
 								codec.LfeOn = bsi.LfeOn
 								codec.BitRateCode = syncInfo.Frmsizecod >> 1
-								updateCodecs()
+								updateCodecs("ac3 config")
 							}
 
 							pts := tunit.PTS + int64(i)*ac3.SamplesPerFrame

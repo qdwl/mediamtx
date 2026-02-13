@@ -78,7 +78,7 @@ func (ri *recorderInstance) run() {
 	if !ri.skip {
 		select {
 		case err := <-ri.rec.Stream.ReaderError(ri):
-			ri.Log(logger.Error, err.Error())
+			ri.Log(logger.Error, "stream reader error on path '%s': %v", ri.rec.PathName, err)
 
 		case <-ri.terminate:
 		}
