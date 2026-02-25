@@ -27,6 +27,7 @@ type parsedSegment struct {
 	init     *fmp4.Init
 	duration time.Duration
 	fileSize int64
+	fileName string
 }
 
 func parseSegment(seg *recordstore.Segment) (*parsedSegment, error) {
@@ -57,6 +58,7 @@ func parseSegment(seg *recordstore.Segment) (*parsedSegment, error) {
 		init:     init,
 		duration: duration,
 		fileSize: fileInfo.Size(),
+		fileName: seg.Fpath,
 	}, nil
 }
 
@@ -91,6 +93,7 @@ type listEntry struct {
 	Start    time.Time         `json:"start"`
 	End      time.Time         `json:"end"`
 	FileSize int64             `json:"fileSize"`
+	FileName string            `json:"fileName"`
 	Duration listEntryDuration `json:"duration"`
 	URL      string            `json:"url"`
 }
@@ -137,6 +140,7 @@ func concatenateSegments(parsed []*parsedSegment) []listEntry {
 			Start:    start,
 			End:      end,
 			FileSize: parsed.fileSize,
+			FileName: parsed.fileName,
 			Duration: listEntryDuration(end.Sub(start)),
 		})
 	}
