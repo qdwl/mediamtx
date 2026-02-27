@@ -42,6 +42,8 @@ import (
 //go:embed VERSION
 var version []byte
 
+var started = time.Now()
+
 var defaultConfPaths = []string{
 	"rtsp-simple-server.yml",
 	"mediamtx.yml",
@@ -659,6 +661,8 @@ func (p *Core) createResources(initial bool) error {
 	if p.conf.API &&
 		p.api == nil {
 		i := &api.API{
+			Version:        string(version),
+			Started:        started,
 			Address:        p.conf.APIAddress,
 			Encryption:     p.conf.APIEncryption,
 			ServerKey:      p.conf.APIServerKey,
