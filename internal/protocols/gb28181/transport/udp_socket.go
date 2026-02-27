@@ -27,7 +27,6 @@ func NewUdpSocket(
 
 	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
-		fmt.Println("ResolveUDPAddr failed:", err)
 		return nil, fmt.Errorf("remote address fmt error")
 	}
 

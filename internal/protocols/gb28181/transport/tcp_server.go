@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -29,7 +28,6 @@ func NewTcpServer(
 ) (*TcpServer, error) {
 	raddr, err := net.ResolveTCPAddr("tcp", remoteAddr)
 	if err != nil {
-		fmt.Println("ResolveTCPAddr failed:", err)
 		return nil, fmt.Errorf("remote address fmt error")
 	}
 
@@ -52,7 +50,6 @@ func NewTcpServer(
 }
 
 func (s *TcpServer) Close() {
-	log.Printf("close tcp server, s.conn:%p\n", s.conn)
 	s.ln.Close()
 	if s.conn != nil {
 		s.conn.Close()
@@ -61,7 +58,6 @@ func (s *TcpServer) Close() {
 }
 
 func (s *TcpServer) runReader() {
-	defer log.Println("TcpServer exit")
 	defer close(s.done)
 	tmp, err := s.ln.Accept()
 	if err != nil {
@@ -90,7 +86,6 @@ func (s *TcpServer) runReader() {
 		buf := make([]byte, length)
 		_, err = io.ReadFull(conn, buf)
 		if err != nil {
-			log.Printf("tcp server read err %+v\n", err)
 			return
 		}
 

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -27,13 +26,11 @@ func NewTcpClient(
 ) (*TcpClient, error) {
 	laddr, err := net.ResolveTCPAddr(restrictnetwork.Restrict("tcp", localAddr))
 	if err != nil {
-		fmt.Println("ResolveTCPAddr failed:", err)
 		return nil, fmt.Errorf("remote address fmt error")
 	}
 
 	raddr, err := net.ResolveTCPAddr("tcp", remoteAddr)
 	if err != nil {
-		fmt.Println("ResolveTCPAddr failed:", err)
 		return nil, fmt.Errorf("remote address fmt error")
 	}
 
@@ -60,7 +57,6 @@ func NewTcpClient(
 }
 
 func (c *TcpClient) Close() {
-	log.Printf("close tcp client, c.conn:%p\n", c.conn)
 	if c.conn != nil {
 		c.conn.Close()
 	}
@@ -75,7 +71,6 @@ func (c *TcpClient) runReader() {
 		lengthBytes := make([]byte, 2)
 		_, err := io.ReadFull(c.conn, lengthBytes)
 		if err != nil {
-			log.Printf("tcp client read err %+v\n", err)
 			break
 		}
 
@@ -84,7 +79,6 @@ func (c *TcpClient) runReader() {
 		buf := make([]byte, length)
 		_, err = io.ReadFull(c.conn, buf)
 		if err != nil {
-			log.Printf("tcp client read err %+v\n", err)
 			return
 		}
 
@@ -98,7 +92,6 @@ func (c *TcpClient) runReader() {
 			c.reader.ProcessRtpPacket(pkt)
 		}()
 	}
-	log.Println("TcpClient exit")
 }
 
 func (c *TcpClient) Write(buf []byte) error {
