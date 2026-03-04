@@ -64,7 +64,8 @@ func (s *Server) Initialize() error {
 
 	router.GET("/list", s.onList)
 	router.GET("/get", s.onGet)
-	router.POST("/start", s.onStart)
+	router.POST("/create", s.onCreate)
+	router.POST("/play", s.onPlay)
 	router.POST("/stop", s.onStop)
 	router.POST("/control", s.onControl)
 
@@ -169,8 +170,8 @@ func (s *Server) doAuth(ctx *gin.Context, pathName string) bool {
 	return true
 }
 
-// onStart handles the start playback request.
-func (s *Server) onStart(ctx *gin.Context) {
+// onCreate handles the create playback request.
+func (s *Server) onCreate(ctx *gin.Context) {
 	// Parse parameters
 	sourcePath := ctx.PostForm("sourcePath")
 	playbackPath := ctx.PostForm("playbackPath")
@@ -188,13 +189,13 @@ func (s *Server) onStart(ctx *gin.Context) {
 	}
 
 	// Parse time parameters
-	startTime, err := time.Parse(time.RFC3339, startTimeStr)
+	startTime, err := time.Parse(time.RFC3339Nano, startTimeStr)
 	if err != nil {
 		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid startTime: %w", err))
 		return
 	}
 
-	endTime, err := time.Parse(time.RFC3339, endTimeStr)
+	endTime, err := time.Parse(time.RFC3339Nano, endTimeStr)
 	if err != nil {
 		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid endTime: %w", err))
 		return
@@ -205,7 +206,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		return
 	}
 
-	s.Log(logger.Info, "start playback sourcePath %s, playbackPath %s startTime %s endTime %s",
+	s.Log(logger.Info, "create playback sourcePath %s, playbackPath %s startTime %s endTime %s",
 		sourcePath, playbackPath, startTimeStr, endTimeStr)
 
 	// Find path configuration
@@ -221,7 +222,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		playbackPath:    playbackPath,
 		startTime:       startTime,
 		endTime:         endTime,
-		status:          "starting",
+		status:          "waiting",
 		currentPosition: 0,
 		playbackSpeed:   1.0,
 		server:          s,
@@ -255,9 +256,8 @@ func (s *Server) onStart(ctx *gin.Context) {
 	}
 
 	session.path = path
-	session.status = "playing"
+	session.status = "waiting"
 
-	// Start publisher to begin playback
 	// Generate stream description from recording's init data
 	var desc *description.Session
 
@@ -381,19 +381,7 @@ func (s *Server) onStart(ctx *gin.Context) {
 		desc.Medias = append(desc.Medias, media)
 	}
 
-	stream, err := path.StartPublisher(defs.PathStartPublisherReq{
-		Author:             session,
-		Desc:               desc,
-		GenerateRTPPackets: true,
-	})
-	if err != nil {
-		s.playbackMutex.Lock()
-		delete(s.playbackSessions, playbackPath)
-		s.playbackMutex.Unlock()
-		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("failed to start publisher: %w", err))
-		return
-	}
-	session.StartPlayback(stream, tracks)
+	session.PrepareDescription(desc, tracks)
 
 	// Return session information
 	ctx.JSON(http.StatusOK, gin.H{
@@ -405,6 +393,46 @@ func (s *Server) onStart(ctx *gin.Context) {
 		"status":          session.status,
 		"currentPosition": 0,
 		"playbackSpeed":   1.0,
+	})
+}
+
+// onPlay handles the play playback request.
+func (s *Server) onPlay(ctx *gin.Context) {
+	playbackPath := ctx.PostForm("playbackPath")
+	if playbackPath == "" {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("missing playbackPath"))
+		return
+	}
+
+	s.playbackMutex.RLock()
+	session, ok := s.playbackSessions[playbackPath]
+	if !ok {
+		s.playbackMutex.RUnlock()
+		s.writeError(ctx, http.StatusNotFound, fmt.Errorf("session not found"))
+		return
+	}
+	s.playbackMutex.RUnlock()
+
+	if !s.doAuth(ctx, session.sourcePath) {
+		return
+	}
+
+	err := session.EnsurePublisherStarted()
+	if err != nil {
+		s.writeError(ctx, http.StatusInternalServerError, fmt.Errorf("unable to start publisher: %w", err))
+		return
+	}
+
+	err = session.StartPlayback(session.stream, session.tracks)
+	if err != nil {
+		s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("unable to play playback: %w", err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"playbackPath": playbackPath,
+		"status":       session.status,
 	})
 }
 
@@ -503,18 +531,20 @@ func (s *Server) onControl(ctx *gin.Context) {
 					return
 				}
 
-				// Stop current playback
-				session.Close()
-
 				// Update seek position
 				session.currentPosition = seekPos
-				session.status = "seeking"
 
-				// Restart playback from new position
-				go func() {
-					session.status = "playing"
-					session.playback()
-				}()
+				if session.IsStarted() {
+					// Stop current playback
+					session.Close()
+					if err := session.StartPlayback(session.stream, session.tracks); err != nil {
+						s.writeError(ctx, http.StatusBadRequest, fmt.Errorf("restart playback failed: %w", err))
+						return
+					}
+				} else {
+					session.status = "waiting"
+				}
+
 				session.Log(logger.Info, "seek to position %v", seekPos)
 			}
 		default:

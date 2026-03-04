@@ -37,6 +37,8 @@ func setupVideo(
 
 	if videoFormatH264 != nil {
 		var videoDTSExtractor *h264.DTSExtractor
+		waitingIDRLogged := false
+		firstIDRLogged := false
 
 		str.AddReader(
 			reader,
@@ -70,11 +72,19 @@ func setupVideo(
 				// wait until we receive an IDR
 				if videoDTSExtractor == nil {
 					if !idrPresent {
+						if !waitingIDRLogged {
+							reader.Log(logger.Debug, "flv waiting first IDR (h264), dropping pre-IDR samples")
+							waitingIDRLogged = true
+						}
 						return nil
 					}
 
 					videoDTSExtractor = &h264.DTSExtractor{}
 					videoDTSExtractor.Initialize()
+					if !firstIDRLogged {
+						reader.Log(logger.Debug, "flv first IDR accepted (h264), pts=%d", tunit.PTS)
+						firstIDRLogged = true
+					}
 				} else if !idrPresent && !nonIDRPresent {
 					return nil
 				}
@@ -98,6 +108,8 @@ func setupVideo(
 
 	if videoFormatH265 != nil {
 		var videoDTSExtractor *h265.DTSExtractor
+		waitingIDRLogged := false
+		firstIDRLogged := false
 
 		str.AddReader(
 			reader,
@@ -147,11 +159,19 @@ func setupVideo(
 				// wait until we receive an IDR
 				if videoDTSExtractor == nil {
 					if !idrPresent {
+						if !waitingIDRLogged {
+							reader.Log(logger.Debug, "flv waiting first IDR (h265), dropping pre-IDR samples")
+							waitingIDRLogged = true
+						}
 						return nil
 					}
 
 					videoDTSExtractor = &h265.DTSExtractor{}
 					videoDTSExtractor.Initialize()
+					if !firstIDRLogged {
+						reader.Log(logger.Debug, "flv first IDR accepted (h265), pts=%d", tunit.PTS)
+						firstIDRLogged = true
+					}
 				} else if !idrPresent && !nonIDRPresent {
 					return nil
 				}

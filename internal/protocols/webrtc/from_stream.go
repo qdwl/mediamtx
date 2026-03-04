@@ -243,6 +243,7 @@ func setupVideoTrack(
 
 				if !firstReceived {
 					firstReceived = true
+					reader.Log(logger.Debug, "webrtc first video AU accepted (h265), pts=%d", tunit.PTS)
 				} else if tunit.PTS < lastPTS {
 					return fmt.Errorf("WebRTC doesn't support H265 streams with B-frames")
 				}
@@ -303,6 +304,7 @@ func setupVideoTrack(
 
 				if !firstReceived {
 					firstReceived = true
+					reader.Log(logger.Debug, "webrtc first video AU accepted (h264), pts=%d", tunit.PTS)
 				} else if tunit.PTS < lastPTS {
 					return fmt.Errorf("WebRTC doesn't support H264 streams with B-frames")
 				}

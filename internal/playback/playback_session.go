@@ -2,8 +2,10 @@ package playback
 
 import (
 	"os"
+	"sync"
 	"time"
 
+	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 
 	"github.com/bluenviron/mediamtx/internal/defs"
@@ -23,15 +25,26 @@ type playbackSession struct {
 	playbackSpeed   float64
 	path            defs.Path
 	stream          *stream.Stream
+	desc            *description.Session
 	tracks          []*muxerStreamTrack
 	muxer           *muxerStream
 	server          *Server
+	startMutex      sync.Mutex
+	started         bool
+	publishing      bool
+	publishingInit  bool
 }
 
 // Close implements defs.Publisher.
 func (ps *playbackSession) Close() {
+	ps.startMutex.Lock()
+	ps.started = false
+	ps.startMutex.Unlock()
+
 	// Close the done channel to signal playback stop
-	ps.muxer.Close()
+	if ps.muxer != nil {
+		ps.muxer.Close()
+	}
 
 	// Update session status
 	ps.status = "stopped"
@@ -52,11 +65,71 @@ func (ps *playbackSession) APISourceDescribe() defs.APIPathSourceOrReader {
 	}
 }
 
-func (ps *playbackSession) StartPlayback(s *stream.Stream, tracks []*muxerStreamTrack) {
+func (ps *playbackSession) StartPlayback(s *stream.Stream, tracks []*muxerStreamTrack) error {
+	ps.startMutex.Lock()
+	defer ps.startMutex.Unlock()
+
+	if ps.started {
+		return nil
+	}
+	if s == nil || len(tracks) == 0 {
+		return os.ErrInvalid
+	}
+
 	ps.stream = s
 	ps.tracks = tracks
+	ps.started = true
+	ps.status = "playing"
 
 	go ps.playback()
+	return nil
+}
+
+func (ps *playbackSession) IsStarted() bool {
+	ps.startMutex.Lock()
+	defer ps.startMutex.Unlock()
+	return ps.started
+}
+
+func (ps *playbackSession) PrepareDescription(desc *description.Session, tracks []*muxerStreamTrack) {
+	ps.startMutex.Lock()
+	defer ps.startMutex.Unlock()
+	ps.desc = desc
+	ps.tracks = tracks
+}
+
+func (ps *playbackSession) EnsurePublisherStarted() error {
+	ps.startMutex.Lock()
+	if ps.publishing || ps.publishingInit {
+		ps.startMutex.Unlock()
+		return nil
+	}
+	if ps.path == nil || ps.desc == nil {
+		ps.startMutex.Unlock()
+		return os.ErrInvalid
+	}
+	ps.publishingInit = true
+	ps.startMutex.Unlock()
+
+	stream, err := ps.path.StartPublisher(defs.PathStartPublisherReq{
+		Author:             ps,
+		Desc:               ps.desc,
+		GenerateRTPPackets: true,
+	})
+	if err != nil {
+		ps.startMutex.Lock()
+		ps.publishingInit = false
+		ps.startMutex.Unlock()
+		return err
+	}
+
+	ps.startMutex.Lock()
+	ps.stream = stream
+	ps.publishing = true
+	ps.publishingInit = false
+	ps.startMutex.Unlock()
+
+	return nil
 }
 
 func (ps *playbackSession) SeekPosition(pos time.Duration) {
@@ -65,20 +138,26 @@ func (ps *playbackSession) SeekPosition(pos time.Duration) {
 
 func (ps *playbackSession) PlaybackSpeed(speed float64) {
 	ps.playbackSpeed = speed
-	ps.muxer.playbackSpeed = speed
+	if ps.muxer != nil {
+		ps.muxer.playbackSpeed = speed
+	}
 }
 
 // Pause pauses playback.
 func (ps *playbackSession) Pause() {
 	ps.status = "paused"
-	ps.muxer.Pause()
+	if ps.muxer != nil {
+		ps.muxer.Pause()
+	}
 	ps.Log(logger.Info, "playback paused")
 }
 
 // Resume resumes playback.
 func (ps *playbackSession) Resume() {
 	ps.status = "playing"
-	ps.muxer.Resume()
+	if ps.muxer != nil {
+		ps.muxer.Resume()
+	}
 	ps.Log(logger.Info, "playback resumed")
 }
 
@@ -273,7 +352,7 @@ func (ps *playbackSession) playback() {
 		}
 	}
 
-	ps.muxer.resetTimeBase()
+	ps.muxer.resetTimeBase(ps.currentPosition > 0)
 
 	// Process segments and write samples
 	ps.processSegments(segments, init, ps.muxer)

@@ -121,14 +121,35 @@ func (m *muxerStream) writeSample(dts int64, ptsOffset int32, isNonSyncSample bo
 
 	// Handle GOPs before GOP of first frame when not starting from beginning
 	if dts < 0 {
+		m.Log(logger.Debug, "dropping sample: dts<0 dts=%d ptsOffset=%d nonSync=%v trackID=%v",
+			dts, ptsOffset, isNonSyncSample, func() interface{} {
+				if m.curTrack == nil {
+					return "nil"
+				}
+				return m.curTrack.ID
+			}())
 		return nil
 	}
 
 	// After seek, drop non-sync samples until the first sync sample (IDR/CRA).
 	if m.dropUntilSync && isNonSyncSample {
+		m.Log(logger.Debug, "dropping sample: waiting sync dts=%d ptsOffset=%d trackID=%v",
+			dts, ptsOffset, func() interface{} {
+				if m.curTrack == nil {
+					return "nil"
+				}
+				return m.curTrack.ID
+			}())
 		return nil
 	}
 	if m.dropUntilSync && !isNonSyncSample {
+		m.Log(logger.Debug, "first sync sample accepted dts=%d ptsOffset=%d trackID=%v",
+			dts, ptsOffset, func() interface{} {
+				if m.curTrack == nil {
+					return "nil"
+				}
+				return m.curTrack.ID
+			}())
 		m.dropUntilSync = false
 	}
 
@@ -291,8 +312,8 @@ func (m *muxerStream) setTrack(trackID int) {
 }
 
 // resetTimeBase resets the time base for all tracks.
-// This should be called when a seek operation occurs.
-func (m *muxerStream) resetTimeBase() {
+// dropUntilSync should be enabled only when resuming from a seek position.
+func (m *muxerStream) resetTimeBase(dropUntilSync bool) {
 	m.baseSet = false
 	m.baseDTS = 0
 	m.baseTime = time.Time{}
@@ -302,7 +323,7 @@ func (m *muxerStream) resetTimeBase() {
 	m.closeOnce = sync.Once{}
 	m.paused = false
 	m.pauseCond = sync.NewCond(&m.pauseMutex)
-	m.dropUntilSync = true
+	m.dropUntilSync = dropUntilSync
 	m.pauseStart = time.Time{}
 }
 

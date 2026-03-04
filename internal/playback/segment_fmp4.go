@@ -10,6 +10,7 @@ import (
 
 	"github.com/abema/go-mp4"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
+	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/recordstore"
 )
 
@@ -19,6 +20,10 @@ const (
 )
 
 var errTerminated = errors.New("terminated")
+
+type muxerLogger interface {
+	Log(level logger.Level, format string, args ...interface{})
+}
 
 type readSeekerAt interface {
 	io.Reader
@@ -441,6 +446,16 @@ func segmentFMP4SeekAndMuxParts(
 
 				sampleOffset := dataOffset
 				sampleSize := e.SampleSize
+
+				if muxerDTS < 0 {
+					if ml, ok := m.(muxerLogger); ok {
+						ml.Log(logger.Debug, "sample before start: dts=%d ptsOffset=%d nonSync=%v track=%d",
+							muxerDTS,
+							e.SampleCompositionTimeOffsetV1,
+							(e.SampleFlags&sampleFlagIsNonSyncSample) != 0,
+							tfhd.TrackID)
+					}
+				}
 
 				err = m.writeSample(
 					muxerDTS,

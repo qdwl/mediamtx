@@ -127,15 +127,6 @@ func concatenateSegments(parsed []*parsedSegment) []listEntry {
 		start := parsed.start
 		end := parsed.start.Add(parsed.duration)
 
-		// if segment start contains milliseconds, align bounds to seconds.
-		if parsed.start.Nanosecond()/int(time.Millisecond) > 0 {
-			start = parsed.start.Truncate(time.Second).Add(time.Second)
-			end = end.Truncate(time.Second)
-			if end.Before(start) {
-				end = start
-			}
-		}
-
 		out = append(out, listEntry{
 			Start:    start,
 			End:      end,
