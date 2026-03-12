@@ -155,7 +155,6 @@ _rtsp-simple-server_ has been rebranded as _MediaMTX_. The reason is pretty obvi
 - [Compile from source](#compile-from-source)
   - [Standard](#standard)
   - [OpenWrt](#openwrt-1)
-  - [Custom libcamera](#custom-libcamera)
   - [Cross compile](#cross-compile)
   - [Compile for all supported platforms](#compile-for-all-supported-platforms)
   - [Docker image](#docker-image-1)
@@ -591,6 +590,8 @@ ffmpeg -list_devices true -f dshow -i dummy
 The resulting stream is available in path `/cam`.
 
 #### Raspberry Pi Cameras
+
+Note: this build disables Raspberry Pi Camera support by default to avoid external binary dependencies. The section below applies only if you re-enable it.
 
 _MediaMTX_ natively supports most of the Raspberry Pi Camera models, enabling high-quality and low-latency video streaming from the camera to any user, for any purpose. There are a couple of requirements:
 
@@ -2541,10 +2542,6 @@ The command will produce the `mediamtx` binary.
 
 If the OpenWrt device doesn't have enough resources to compile, you can [cross compile](#cross-compile) from another machine.
 
-### Custom libcamera
-
-If you need to use a custom or external libcamera when interacting with the Raspberry Pi Camera, you have to compile [mediamtx-rpicamera](https://github.com/bluenviron/mediamtx-rpicamera) before compiling the server. Instructions are present in the `mediamtx-rpicamera` repository.
-
 ### Cross compile
 
 Cross compilation allows to build an executable for a target machine from another machine with different operating system or architecture. This is useful in case the target machine doesn't have enough resources for compilation or if you don't want to install the compilation dependencies on it.
@@ -2617,8 +2614,6 @@ The official Docker image can be recompiled by following these steps:
 All the code in this repository is released under the [MIT License](LICENSE). Compiled binaries include some third-party dependencies:
 
 - all the Golang-based dependencies listed into the [go.mod file](go.mod), which are all released under either the MIT license, BSD 3-Clause license or Apache License 2.0.
-- hls.js, released under the [Apache License 2.0](https://github.com/video-dev/hls.js/blob/master/LICENSE).
-- mediamtx-rpicamera, which is released under the same license of _MediaMTX_ but includes some [third-party dependencies](https://github.com/bluenviron/mediamtx-rpicamera?tab=readme-ov-file#license).
 
 ## Specifications
 
@@ -2647,7 +2642,6 @@ All the code in this repository is released under the [MIT License](LICENSE). Co
 - [gortsplib (RTSP library used internally)](https://github.com/bluenviron/gortsplib)
 - [gohlslib (HLS library used internally)](https://github.com/bluenviron/gohlslib)
 - [mediacommon (codecs and formats library used internally)](https://github.com/bluenviron/mediacommon)
-- [mediamtx-rpicamera (Raspberry Pi Camera component)](https://github.com/bluenviron/mediamtx-rpicamera)
 - [datarhei/gosrt (SRT library used internally)](https://github.com/datarhei/gosrt)
 - [pion/webrtc (WebRTC library used internally)](https://github.com/pion/webrtc)
 - [pion/sdp (SDP library used internally)](https://github.com/pion/sdp)
@@ -2655,7 +2649,6 @@ All the code in this repository is released under the [MIT License](LICENSE). Co
 - [pion/rtcp (RTCP library used internally)](https://github.com/pion/rtcp)
 - [go-astits (MPEG-TS library used internally)](https://github.com/asticode/go-astits)
 - [go-mp4 (MP4 library used internally)](https://github.com/abema/go-mp4)
-- [hls.js (browser-side HLS library used internally)](https://github.com/video-dev/hls.js)
 
 ## Transcode dependence
 

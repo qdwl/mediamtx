@@ -12,7 +12,6 @@ import (
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/logger"
 	sshls "github.com/bluenviron/mediamtx/internal/staticsources/hls"
-	ssrpicamera "github.com/bluenviron/mediamtx/internal/staticsources/rpicamera"
 	ssrtmp "github.com/bluenviron/mediamtx/internal/staticsources/rtmp"
 	ssrtsp "github.com/bluenviron/mediamtx/internal/staticsources/rtsp"
 	sssrt "github.com/bluenviron/mediamtx/internal/staticsources/srt"
@@ -127,12 +126,6 @@ func (s *Handler) Initialize() {
 		s.instance = &sswebrtc.Source{
 			ReadTimeout: s.ReadTimeout,
 			Parent:      s,
-		}
-
-	case s.Conf.Source == "rpiCamera":
-		s.instance = &ssrpicamera.Source{
-			LogLevel: s.LogLevel,
-			Parent:   s,
 		}
 
 	default:
