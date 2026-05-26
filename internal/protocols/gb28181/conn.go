@@ -154,7 +154,6 @@ func NewConn(
 	case TcpServer:
 		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
 	}
-	c.Log(logger.Info, "protocol:%d, localAddr:%s, remoteAddr:%s, transport:%+v", protocol, localAddr, remoteAddr, c.transport)
 
 	c.muxer.OnPacket = c.OnMuxPacket
 	c.demuxer.OnPacket = c.OnDemuxPacket
