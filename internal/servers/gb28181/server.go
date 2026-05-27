@@ -20,7 +20,7 @@ type GB28181CreateReq struct {
 	RemotePort  int    `json:"remotePort"`
 	Transport   int    `json:"transport"`
 	Direction   string `json:"direction"`
-	LiveStream  bool   `json:"liveStream"`
+	StreamType  string `json:"streamType"`
 }
 
 type GB28181CreateRes struct {
@@ -52,6 +52,7 @@ type gb28181NewSessionReq struct {
 	payloadType uint8
 	remoteIp    string
 	remotePort  int
+	streamType  string
 	transport   int
 	direction   string
 	liveStream  bool

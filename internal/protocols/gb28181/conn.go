@@ -89,7 +89,7 @@ type Conn struct {
 	buf                 []byte
 	timebase            int64
 	payloadType         uint8
-	liveStream          bool
+	streamType          string
 	lastActiveTime      time.Time
 
 	vcid uint8
@@ -114,7 +114,7 @@ func NewConn(
 	remotePort int,
 	protocol int,
 	payloadType uint8,
-	liveStream bool,
+	streamType string,
 ) *Conn {
 	ctx, ctxCancel := context.WithCancel(parentCtx)
 
@@ -131,7 +131,7 @@ func NewConn(
 		OnFrameFuncMap: make(map[uint8]OnFrameFunc),
 		buf:            make([]byte, 1500),
 		payloadType:    payloadType,
-		liveStream:     liveStream,
+		streamType:     streamType,
 		frameCache:     make([]*PsFrame, 0),
 		lastActiveTime: time.Now(),
 		packetChan:     make(chan mpeg2.Display),
@@ -277,18 +277,19 @@ func (c *Conn) StartRead() {
 
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
 	if c.timebase == 0 {
-		if c.liveStream {
-			c.timebase = int64(pts)
-		} else {
+		if c.streamType == "playback" {
 			c.timebase = time.Now().UnixMilli()
+
+		} else {
+			c.timebase = int64(pts)
 		}
 	}
 
 	var ts time.Duration
-	if c.liveStream {
-		ts = time.Duration(pts - uint64(c.timebase))
-	} else {
+	if c.streamType == "playback" {
 		ts = time.Duration(time.Now().UnixMilli() - c.timebase)
+	} else {
+		ts = time.Duration(pts - uint64(c.timebase))
 	}
 
 	if !c.startRead.Load() {
