@@ -146,14 +146,22 @@ func NewConn(
 	localAddr := fmt.Sprintf(":%d", port)
 	remoteAddr := fmt.Sprintf("%s:%d", remoteIp, remotePort)
 
+	var err error
 	switch protocol {
 	case UdpSocket:
-		c.transport, _ = transport.NewUdpSocket(c, localAddr, remoteAddr)
+		c.transport, err = transport.NewUdpSocket(c, localAddr, remoteAddr)
 	case TcpClient:
-		c.transport, _ = transport.NewTcpClient(c, localAddr, remoteAddr)
+		c.transport, err = transport.NewTcpClient(c, localAddr, remoteAddr)
 	case TcpServer:
-		c.transport, _ = transport.NewTcpServer(c, localAddr, remoteAddr)
+		c.transport, err = transport.NewTcpServer(c, localAddr, remoteAddr)
 	}
+
+	if err != nil {
+		c.Log(logger.Error, "failed to create transport: %v", err)
+		return nil
+	}
+
+	c.Log(logger.Info, "new gb28181 conn, local %s, remote %s, protocol %d, payloadType %d, streamType %s", localAddr, remoteAddr, protocol, payloadType, streamType)
 
 	c.muxer.OnPacket = c.OnMuxPacket
 	c.demuxer.OnPacket = c.OnDemuxPacket
