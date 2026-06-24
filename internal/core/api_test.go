@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	pwebrtc "github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/protocols/rtmp"
 	"github.com/bluenviron/mediamtx/internal/protocols/webrtc"
 	"github.com/bluenviron/mediamtx/internal/protocols/whip"
@@ -1202,4 +1204,46 @@ func TestAPIProtocolKickNotFound(t *testing.T) {
 			}()
 		})
 	}
+}
+
+func TestAPIRecordingsControlStartWithDeleteAfter(t *testing.T) {
+	dir, err := os.MkdirTemp("", "mediamtx-record-control")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	p, ok := newInstance("api: yes\n" +
+		"pathDefaults:\n" +
+		"  recordPath: " + filepath.Join(dir, "%path/%Y-%m-%d_%H-%M-%S-%f") + "\n" +
+		"  record: no\n" +
+		"paths:\n" +
+		"  all_others:\n")
+	require.Equal(t, true, ok)
+	defer p.Close()
+
+	tr := &http.Transport{}
+	defer tr.CloseIdleConnections()
+	hc := &http.Client{Transport: tr}
+
+	source := gortsplib.Client{}
+	err = source.StartRecording("rtsp://localhost:8554/mypath",
+		&description.Session{Medias: []*description.Media{test.UniqueMediaH264()}})
+	require.NoError(t, err)
+	defer source.Close()
+
+	httpRequest(t, hc, http.MethodPost, "http://localhost:9997/v3/recordings/control/mypath", map[string]any{
+		"recordDeleteAfter": "2h",
+	}, nil)
+
+	require.Eventually(t, func() bool {
+		pd, ok := p.pathManager.paths["mypath"]
+		return ok && pd.path.needRecording && pd.path.conf.RecordDeleteAfter == conf.Duration(2*time.Hour)
+	}, time.Second, 50*time.Millisecond)
+
+	pa := p.pathManager.paths["mypath"].path
+	require.True(t, pa.needRecording)
+	require.Equal(t, conf.Duration(2*time.Hour), pa.conf.RecordDeleteAfter)
+	require.NotNil(t, p.recordCleaner)
+
+	httpRequest(t, hc, http.MethodPost, "http://localhost:9997/v3/recordings/control/mypath", nil, nil)
+	require.Equal(t, conf.Duration(2*time.Hour), pa.conf.RecordDeleteAfter)
 }

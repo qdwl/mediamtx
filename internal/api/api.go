@@ -4,6 +4,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -30,6 +31,10 @@ import (
 	"github.com/bluenviron/mediamtx/internal/servers/srt"
 	"github.com/bluenviron/mediamtx/internal/servers/webrtc"
 )
+
+type recordingStartRequest struct {
+	RecordDeleteAfter *conf.Duration `json:"recordDeleteAfter"`
+}
 
 func interfaceIsEmpty(i interface{}) bool {
 	return reflect.ValueOf(i).Kind() != reflect.Ptr || reflect.ValueOf(i).IsNil()
@@ -605,7 +610,23 @@ func (a *API) onPathStartRecording(ctx *gin.Context) {
 		return
 	}
 
-	err := a.PathManager.APIPathStartRecording(pathName)
+	var req recordingStartRequest
+
+	byts, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		a.writeError(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	if len(byts) != 0 {
+		err = jsonwrapper.Unmarshal(byts, &req)
+		if err != nil {
+			a.writeError(ctx, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	err = a.PathManager.APIPathStartRecording(pathName, req.RecordDeleteAfter)
 	if err != nil {
 		if errors.Is(err, conf.ErrPathNotFound) {
 			a.writeError(ctx, http.StatusNotFound, err)

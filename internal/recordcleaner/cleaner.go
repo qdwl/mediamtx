@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bluenviron/mediamtx/internal/conf"
@@ -24,13 +25,16 @@ type Cleaner struct {
 	ctx       context.Context
 	ctxCancel func()
 
-	chReloadConf chan map[string]*conf.Path
-	done         chan struct{}
+	mutex                      sync.RWMutex
+	recordDeleteAfterOverrides map[string]conf.Duration
+	chReloadConf               chan map[string]*conf.Path
+	done                       chan struct{}
 }
 
 // Initialize initializes a Cleaner.
 func (c *Cleaner) Initialize() {
 	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
+	c.recordDeleteAfterOverrides = make(map[string]conf.Duration)
 	c.chReloadConf = make(chan map[string]*conf.Path)
 	c.done = make(chan struct{})
 
@@ -56,6 +60,19 @@ func (c *Cleaner) ReloadPathConfs(pathConfs map[string]*conf.Path) {
 	}
 }
 
+// SetRecordDeleteAfterOverride sets a per-path retention override.
+func (c *Cleaner) SetRecordDeleteAfterOverride(pathName string, recordDeleteAfter *conf.Duration) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if recordDeleteAfter == nil {
+		delete(c.recordDeleteAfterOverrides, pathName)
+		return
+	}
+
+	c.recordDeleteAfterOverrides[pathName] = *recordDeleteAfter
+}
+
 func (c *Cleaner) run() {
 	defer close(c.done)
 
@@ -79,9 +96,17 @@ func (c *Cleaner) cleanInterval() time.Duration {
 	interval := 30 * 60 * time.Second
 
 	for _, e := range c.PathConfs {
-		if e.RecordDeleteAfter != 0 &&
-			interval > (time.Duration(e.RecordDeleteAfter)/2) {
+		if e.RecordDeleteAfter != 0 && interval > (time.Duration(e.RecordDeleteAfter)/2) {
 			interval = time.Duration(e.RecordDeleteAfter) / 2
+		}
+	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	for _, e := range c.recordDeleteAfterOverrides {
+		if e != 0 && interval > (time.Duration(e)/2) {
+			interval = time.Duration(e) / 2
 		}
 	}
 
@@ -104,11 +129,12 @@ func (c *Cleaner) processPath(now time.Time, pathName string) error {
 		return err
 	}
 
-	if pathConf.RecordDeleteAfter == 0 {
+	recordDeleteAfter := c.recordDeleteAfter(pathName, pathConf)
+	if recordDeleteAfter == 0 {
 		return nil
 	}
 
-	err = c.deleteExpiredSegments(now, pathName, pathConf)
+	err = c.deleteExpiredSegments(now, pathName, pathConf, recordDeleteAfter)
 	if err != nil {
 		return err
 	}
@@ -118,8 +144,24 @@ func (c *Cleaner) processPath(now time.Time, pathName string) error {
 	return nil
 }
 
-func (c *Cleaner) deleteExpiredSegments(now time.Time, pathName string, pathConf *conf.Path) error {
-	end := now.Add(-time.Duration(pathConf.RecordDeleteAfter))
+func (c *Cleaner) recordDeleteAfter(pathName string, pathConf *conf.Path) conf.Duration {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if v, ok := c.recordDeleteAfterOverrides[pathName]; ok {
+		return v
+	}
+
+	return pathConf.RecordDeleteAfter
+}
+
+func (c *Cleaner) deleteExpiredSegments(
+	now time.Time,
+	pathName string,
+	pathConf *conf.Path,
+	recordDeleteAfter conf.Duration,
+) error {
+	end := now.Add(-time.Duration(recordDeleteAfter))
 	segments, err := recordstore.FindSegments(pathConf, pathName, nil, &end)
 	if err != nil {
 		return err

@@ -57,6 +57,7 @@ type pathData struct {
 
 type pathManagerParent interface {
 	logger.Writer
+	setRecordDeleteAfterOverride(string, *conf.Duration)
 }
 
 type pathManager struct {
@@ -625,10 +626,11 @@ func (pm *pathManager) APIPathsGet(name string) (*defs.APIPath, error) {
 }
 
 // APIPathStartRecording is called by api
-func (pm *pathManager) APIPathStartRecording(name string) error {
+func (pm *pathManager) APIPathStartRecording(name string, recordDeleteAfter *conf.Duration) error {
 	req := pathAPIStartRecordingReq{
-		name: name,
-		res:  make(chan pathAPIStartRecordingRes),
+		name:              name,
+		recordDeleteAfter: recordDeleteAfter,
+		res:               make(chan pathAPIStartRecordingRes),
 	}
 
 	select {
@@ -639,6 +641,9 @@ func (pm *pathManager) APIPathStartRecording(name string) error {
 		}
 
 		err := res.path.APIStartRecording(req)
+		if err == nil && recordDeleteAfter != nil {
+			pm.parent.setRecordDeleteAfterOverride(name, recordDeleteAfter)
+		}
 		return err
 
 	case <-pm.ctx.Done():

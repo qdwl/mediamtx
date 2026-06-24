@@ -69,8 +69,9 @@ type pathAPIStartRecordingRes struct {
 }
 
 type pathAPIStartRecordingReq struct {
-	name string
-	res  chan pathAPIStartRecordingRes
+	name              string
+	recordDeleteAfter *conf.Duration
+	res               chan pathAPIStartRecordingRes
 }
 
 type pathAPIStopRecordingRes struct {
@@ -596,6 +597,22 @@ func (pa *path) doRemoveReader(req defs.PathRemoveReaderReq) {
 }
 
 func (pa *path) doAPIStartRecording(req pathAPIStartRecordingReq) {
+	if req.recordDeleteAfter != nil {
+		if *req.recordDeleteAfter != 0 && *req.recordDeleteAfter < pa.conf.RecordSegmentDuration {
+			req.res <- pathAPIStartRecordingRes{
+				err: fmt.Errorf("'recordDeleteAfter' cannot be lower than 'recordSegmentDuration'"),
+			}
+			return
+		}
+
+		newConf := pa.conf.Clone()
+		newConf.RecordDeleteAfter = *req.recordDeleteAfter
+
+		pa.confMutex.Lock()
+		pa.conf = newConf
+		pa.confMutex.Unlock()
+	}
+
 	pa.needRecording = true
 	if pa.stream != nil && pa.recorder == nil {
 		pa.startRecording()

@@ -12,7 +12,7 @@ import (
 type APIPathManager interface {
 	APIPathsList() (*APIPathList, error)
 	APIPathsGet(string) (*APIPath, error)
-	APIPathStartRecording(string) error
+	APIPathStartRecording(string, *conf.Duration) error
 	APIPathStopRecording(string) error
 }
 

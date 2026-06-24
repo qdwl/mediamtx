@@ -1085,3 +1085,21 @@ func (p *Core) APIConfigSet(conf *conf.Conf) {
 	case <-p.ctx.Done():
 	}
 }
+
+func (p *Core) setRecordDeleteAfterOverride(pathName string, recordDeleteAfter *conf.Duration) {
+	if recordDeleteAfter == nil {
+		return
+	}
+
+	if p.recordCleaner == nil && *recordDeleteAfter != 0 {
+		p.recordCleaner = &recordcleaner.Cleaner{
+			PathConfs: p.conf.Paths,
+			Parent:    p,
+		}
+		p.recordCleaner.Initialize()
+	}
+
+	if p.recordCleaner != nil {
+		p.recordCleaner.SetRecordDeleteAfterOverride(pathName, recordDeleteAfter)
+	}
+}

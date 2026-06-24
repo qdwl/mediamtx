@@ -108,3 +108,44 @@ func TestCleanerMultipleEntriesSamePath(t *testing.T) {
 	_, err = os.Stat(filepath.Join(dir, "path2", "2009-05-19_22-15-25-000427.mp4"))
 	require.NoError(t, err)
 }
+
+func TestCleanerRecordDeleteAfterOverride(t *testing.T) {
+	timeNow = func() time.Time {
+		return time.Date(2009, 5, 20, 22, 15, 25, 427000, time.Local)
+	}
+
+	dir, err := os.MkdirTemp("", "mediamtx-cleaner")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	err = os.Mkdir(filepath.Join(dir, "mypath"), 0o755)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(dir, "mypath", "2009-05-19_22-15-25-000427.mp4"), []byte{1}, 0o644)
+	require.NoError(t, err)
+
+	c := &Cleaner{
+		PathConfs: map[string]*conf.Path{
+			"all_others": {
+				Name:              "all_others",
+				Regexp:            regexp.MustCompile("^.*$"),
+				RecordPath:        filepath.Join(dir, "%path/%Y-%m-%d_%H-%M-%S-%f"),
+				RecordFormat:      conf.RecordFormatFMP4,
+				RecordDeleteAfter: 0,
+			},
+		},
+		Parent: test.NilLogger,
+	}
+	c.Initialize()
+	defer c.Close()
+
+	c.SetRecordDeleteAfterOverride("mypath", func() *conf.Duration {
+		v := conf.Duration(10 * time.Second)
+		return &v
+	}())
+
+	time.Sleep(500 * time.Millisecond)
+
+	_, err = os.Stat(filepath.Join(dir, "mypath", "2009-05-19_22-15-25-000427.mp4"))
+	require.Error(t, err)
+}
