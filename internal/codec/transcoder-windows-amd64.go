@@ -429,3 +429,250 @@ func (t *AudioTranscoder) addSamplesToFifo(samples [][]byte, frameSize int) erro
 
 	return nil
 }
+
+// VideoTranscoder decodes H.264/H.265 video and encodes to JPEG.
+type VideoTranscoder struct {
+	decCtx   *C.AVCodecContext
+	decFrame *C.AVFrame
+	decPkt   *C.AVPacket
+
+	encCtx *C.AVCodecContext
+	encPkt *C.AVPacket
+
+	swsCtx   *C.struct_SwsContext
+	swsFrame *C.AVFrame
+	swsBuf   []byte
+
+	initialized bool
+	ptsCounter  int64
+}
+
+func (t *VideoTranscoder) closeVideoTranscoder() {
+	if t.decCtx != nil {
+		C.avcodec_close(t.decCtx)
+		t.decCtx = nil
+	}
+	if t.decFrame != nil {
+		C.av_frame_free(&t.decFrame)
+		t.decFrame = nil
+	}
+	if t.decPkt != nil {
+		C.av_packet_free(&t.decPkt)
+		t.decPkt = nil
+	}
+	if t.encCtx != nil {
+		C.avcodec_close(t.encCtx)
+		t.encCtx = nil
+	}
+	if t.encPkt != nil {
+		C.av_packet_free(&t.encPkt)
+		t.encPkt = nil
+	}
+	if t.swsCtx != nil {
+		C.sws_freeContext(t.swsCtx)
+		t.swsCtx = nil
+	}
+	if t.swsFrame != nil {
+		C.av_frame_free(&t.swsFrame)
+		t.swsFrame = nil
+	}
+	t.swsBuf = nil
+	t.initialized = false
+}
+
+func mapCodecID(goID VideoCodecID) C.enum_AVCodecID {
+	switch goID {
+	case VideoCodecH264:
+		return C.AV_CODEC_ID_H264
+	case VideoCodecH265:
+		return C.AV_CODEC_ID_HEVC
+	default:
+		return C.AV_CODEC_ID_NONE
+	}
+}
+
+// Initialize initializes the video transcoder with optional codec extradata (SPS/PPS).
+func (t *VideoTranscoder) Initialize(codecID VideoCodecID, extradata []byte) error {
+	avCodecID := mapCodecID(codecID)
+	if avCodecID == C.AV_CODEC_ID_NONE {
+		return fmt.Errorf("unsupported codec")
+	}
+
+	// init decoder
+	codec := C.avcodec_find_decoder(avCodecID)
+	if codec == nil {
+		return fmt.Errorf("avcodec_find_decoder() failed")
+	}
+
+	t.decCtx = C.avcodec_alloc_context3(codec)
+	if t.decCtx == nil {
+		return fmt.Errorf("avcodec_alloc_context3() failed")
+	}
+
+	// set extradata (e.g. SPS/PPS for H.264, VPS/SPS/PPS for H.265)
+	if len(extradata) > 0 {
+		t.decCtx.extradata_size = C.int(len(extradata))
+		t.decCtx.extradata = (*C.uint8_t)(C.av_malloc(C.size_t(len(extradata))))
+		if t.decCtx.extradata == nil {
+			return fmt.Errorf("failed to allocate extradata")
+		}
+		C.memcpy(unsafe.Pointer(t.decCtx.extradata), unsafe.Pointer(&extradata[0]), C.size_t(len(extradata)))
+	}
+
+	res := C.avcodec_open2(t.decCtx, codec, nil)
+	if res < 0 {
+		return fmt.Errorf("avcodec_open2() failed for decoder")
+	}
+
+	t.decFrame = C.av_frame_alloc()
+	if t.decFrame == nil {
+		return fmt.Errorf("av_frame_alloc() failed")
+	}
+
+	t.decPkt = C.av_packet_alloc()
+	if t.decPkt == nil {
+		return fmt.Errorf("av_packet_alloc() failed")
+	}
+
+	t.initialized = true
+	return nil
+}
+
+func (t *VideoTranscoder) initEncoder(width, height int) error {
+	codec := C.avcodec_find_encoder(C.AV_CODEC_ID_MJPEG)
+	if codec == nil {
+		return fmt.Errorf("avcodec_find_encoder(MJPEG) failed")
+	}
+
+	t.encCtx = C.avcodec_alloc_context3(codec)
+	if t.encCtx == nil {
+		return fmt.Errorf("avcodec_alloc_context3() failed")
+	}
+
+	t.encCtx.width = C.int(width)
+	t.encCtx.height = C.int(height)
+	t.encCtx.pix_fmt = C.AV_PIX_FMT_YUV420P
+	t.encCtx.color_range = C.AVCOL_RANGE_JPEG
+	t.encCtx.time_base.num = 1
+	t.encCtx.time_base.den = 1
+
+	res := C.avcodec_open2(t.encCtx, codec, nil)
+	if res < 0 {
+		return fmt.Errorf("avcodec_open2() failed for encoder")
+	}
+
+	t.encPkt = C.av_packet_alloc()
+	if t.encPkt == nil {
+		return fmt.Errorf("av_packet_alloc() failed")
+	}
+
+	return nil
+}
+
+func (t *VideoTranscoder) initSws(width, height int) error {
+	w := C.int(width)
+	h := C.int(height)
+
+	t.swsCtx = C.sws_getContext(
+		w, h, C.AV_PIX_FMT_YUV420P,
+		w, h, C.AV_PIX_FMT_YUV420P,
+		C.SWS_BILINEAR, nil, nil, nil,
+	)
+	if t.swsCtx == nil {
+		return fmt.Errorf("sws_getContext() failed")
+	}
+
+	t.swsFrame = C.av_frame_alloc()
+	if t.swsFrame == nil {
+		return fmt.Errorf("av_frame_alloc() failed")
+	}
+	t.swsFrame.width = w
+	t.swsFrame.height = h
+	t.swsFrame.format = C.AV_PIX_FMT_YUV420P
+	t.swsFrame.color_range = C.AVCOL_RANGE_JPEG
+
+	res := C.av_frame_get_buffer(t.swsFrame, 0)
+	if res < 0 {
+		return fmt.Errorf("av_frame_get_buffer() failed")
+	}
+
+	return nil
+}
+
+// DecodeAndEncode feeds H.264/H.265 NAL data and returns JPEG bytes on success.
+func (t *VideoTranscoder) DecodeAndEncode(nalData []byte) ([]byte, error) {
+	if !t.initialized {
+		return nil, fmt.Errorf("transcoder not initialized")
+	}
+	if len(nalData) == 0 {
+		return nil, nil
+	}
+
+	cdata := (*C.uint8_t)(unsafe.Pointer(&nalData[0]))
+	clen := C.int(len(nalData))
+
+	t.decPkt.data = cdata
+	t.decPkt.size = clen
+
+	res := C.avcodec_send_packet(t.decCtx, t.decPkt)
+	if res < 0 {
+		return nil, nil // need more data / not yet decoded
+	}
+
+	res = C.avcodec_receive_frame(t.decCtx, t.decFrame)
+	if res == -C.EAGAIN {
+		return nil, nil
+	}
+	if res < 0 {
+		return nil, nil
+	}
+
+	// initialize encoder and scaler on first frame
+	dw := int(t.decFrame.width)
+	dh := int(t.decFrame.height)
+
+	if t.encCtx == nil {
+		if err := t.initEncoder(dw, dh); err != nil {
+			return nil, err
+		}
+		if err := t.initSws(dw, dh); err != nil {
+			return nil, err
+		}
+	}
+
+	// scale YUV420P to YUV420P (JPEG range) if needed
+	frameToEncode := t.decFrame
+	if t.swsCtx != nil {
+		C.sws_scale(t.swsCtx,
+			&t.decFrame.data[0], &t.decFrame.linesize[0], 0, C.int(dh),
+			&t.swsFrame.data[0], &t.swsFrame.linesize[0],
+		)
+		frameToEncode = t.swsFrame
+	}
+
+	t.ptsCounter++
+	frameToEncode.pts = C.int64_t(t.ptsCounter)
+
+	res = C.avcodec_send_frame(t.encCtx, frameToEncode)
+	if res < 0 {
+		return nil, fmt.Errorf("encoder send frame failed")
+	}
+
+	res = C.avcodec_receive_packet(t.encCtx, t.encPkt)
+	if res == -C.EAGAIN {
+		return nil, nil
+	}
+	if res < 0 {
+		return nil, fmt.Errorf("encoder receive packet failed")
+	}
+
+	jpeg := C.GoBytes(unsafe.Pointer(t.encPkt.data), C.int(t.encPkt.size))
+	C.av_packet_unref(t.encPkt)
+
+	return jpeg, nil
+}
+
+// Close releases all resources.
+func (t *VideoTranscoder) Close() {
+	t.closeVideoTranscoder()
+}

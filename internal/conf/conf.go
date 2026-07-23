@@ -331,6 +331,9 @@ type Conf struct {
 	RecordSegmentDuration *Duration     `json:"recordSegmentDuration,omitempty"` // deprecated
 	RecordDeleteAfter     *Duration     `json:"recordDeleteAfter,omitempty"`     // deprecated
 
+	// Snapshot
+	SnapshotDir string `json:"snapshotDir"`
+
 	// Path defaults
 	PathDefaults Path `json:"pathDefaults"`
 
@@ -462,6 +465,9 @@ func (conf *Conf) setDefaults() {
 	conf.Push = true
 	conf.PushAddress = ":8899"
 	conf.PushAllowOrigin = "*"
+
+	// Snapshot
+	conf.SnapshotDir = "./snapshots"
 
 	conf.PathDefaults.setDefaults()
 }

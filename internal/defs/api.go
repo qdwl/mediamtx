@@ -14,6 +14,12 @@ type APIPathManager interface {
 	APIPathsGet(string) (*APIPath, error)
 	APIPathStartRecording(string, *conf.Duration) error
 	APIPathStopRecording(string) error
+	APIPathSnapshot(string) (*APIPathSnapshot, error)
+}
+
+// APIPathSnapshot is a snapshot response.
+type APIPathSnapshot struct {
+	ImagePath string `json:"imagePath"`
 }
 
 // APIHLSServer contains methods used by the API and Metrics server.

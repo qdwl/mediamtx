@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -199,6 +200,9 @@ func (a *API) Initialize() error {
 	group.DELETE("/recordings/deletesegment", a.onRecordingDeleteSegment)
 	group.POST("/recordings/control/*name", a.onPathStartRecording)
 	group.DELETE("/recordings/control/*name", a.onPathStopRecording)
+
+	group.POST("/snapshots/capture/*name", a.onSnapshotsCapture)
+	group.GET("/snapshots/file/*filepath", a.onSnapshotsFile)
 
 	group.GET("/playback/list", a.onRecordingsList)
 
@@ -657,6 +661,46 @@ func (a *API) onPathStopRecording(ctx *gin.Context) {
 	}
 
 	ctx.Status(http.StatusOK)
+}
+
+func (a *API) onSnapshotsCapture(ctx *gin.Context) {
+	pathName, ok := paramName(ctx)
+	if !ok {
+		a.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid name"))
+		return
+	}
+
+	data, err := a.PathManager.APIPathSnapshot(pathName)
+	if err != nil {
+		if errors.Is(err, conf.ErrPathNotFound) {
+			a.writeError(ctx, http.StatusNotFound, err)
+		} else {
+			a.writeError(ctx, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, data)
+}
+
+func (a *API) onSnapshotsFile(ctx *gin.Context) {
+	filePath := ctx.Param("filepath")
+	if len(filePath) < 2 || filePath[0] != '/' {
+		a.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid file path"))
+		return
+	}
+
+	fullPath := filepath.Join(a.Conf.SnapshotDir, filePath[1:])
+
+	// path traversal protection
+	absSnapshotDir, _ := filepath.Abs(a.Conf.SnapshotDir)
+	absFullPath, _ := filepath.Abs(fullPath)
+	if !strings.HasPrefix(absFullPath, absSnapshotDir) {
+		a.writeError(ctx, http.StatusBadRequest, fmt.Errorf("invalid file path"))
+		return
+	}
+
+	ctx.File(fullPath)
 }
 
 func (a *API) onRTSPConnsList(ctx *gin.Context) {

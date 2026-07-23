@@ -13,7 +13,7 @@
 
 </h1>
 
-<br>
+<br />
 
 _MediaMTX_ is a ready-to-use and zero-dependency real-time media server and media proxy that allows to publish, read, proxy, record and playback video and audio streams. It has been conceived as a "media router" that routes media streams from one end to the other.
 
@@ -21,8 +21,8 @@ Live streams can be published to the server with:
 
 | protocol                                              | variants                                   | video codecs                                                                                              | audio codecs                                                                                                           |
 | ----------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| [SRT clients](#srt-clients)                           |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
-| [SRT cameras and servers](#srt-cameras-and-servers)   |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [SRT clients](#srt-clients)                           | <br />                                     | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [SRT cameras and servers](#srt-cameras-and-servers)   | <br />                                     | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
 | [WebRTC clients](#webrtc-clients)                     | WHIP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
 | [WebRTC servers](#webrtc-servers)                     | WHEP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
 | [RTSP clients](#rtsp-clients)                         | UDP, TCP, RTSPS                            | AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec |
@@ -31,13 +31,13 @@ Live streams can be published to the server with:
 | [RTMP cameras and servers](#rtmp-cameras-and-servers) | RTMP, RTMPS, Enhanced RTMP                 | AV1, VP9, H265, H264                                                                                      | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G711 (PCMA, PCMU), LPCM                                          |
 | [HLS cameras and servers](#hls-cameras-and-servers)   | Low-Latency HLS, MP4-based HLS, legacy HLS | AV1, VP9, [H265](#supported-browsers-1), H264                                                             | Opus, MPEG-4 Audio (AAC)                                                                                               |
 | [UDP/MPEG-TS](#udpmpeg-ts)                            | Unicast, broadcast, multicast              | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
-| [Raspberry Pi Cameras](#raspberry-pi-cameras)         |                                            | H264                                                                                                      |                                                                                                                        |
+| [Raspberry Pi Cameras](#raspberry-pi-cameras)         | <br />                                     | H264                                                                                                      | <br />                                                                                                                 |
 
 Live streams can be read from the server with:
 
 | protocol          | variants                                   | video codecs                                                                                              | audio codecs                                                                                                           |
 | ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| [SRT](#srt)       |                                            | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
+| [SRT](#srt)       | <br />                                     | H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video                                                     | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3                                                                   |
 | [WebRTC](#webrtc) | WHEP                                       | AV1, VP9, VP8, [H265](#supported-browsers), H264                                                          | Opus, G722, G711 (PCMA, PCMU)                                                                                          |
 | [RTSP](#rtsp)     | UDP, UDP-Multicast, TCP, RTSPS             | AV1, VP9, VP8, H265, H264, MPEG-4 Video (H263, Xvid), MPEG-1/2 Video, M-JPEG and any RTP-compatible codec | Opus, MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3), AC-3, G726, G722, G711 (PCMA, PCMU), LPCM and any RTP-compatible codec |
 | [RTMP](#rtmp)     | RTMP, RTMPS, Enhanced RTMP                 | H264                                                                                                      | MPEG-4 Audio (AAC), MPEG-1/2 Audio (MP3)                                                                               |
@@ -169,9 +169,7 @@ There are several installation methods available: standalone binary, Docker imag
 ### Standalone binary
 
 1. Download and extract a standalone binary from the [release page](https://github.com/bluenviron/mediamtx/releases) that corresponds to your operating system and architecture.
-
 2. Start the server:
-
    ```sh
    ./mediamtx
    ```
@@ -186,12 +184,12 @@ docker run --rm -it --network=host bluenviron/mediamtx:latest
 
 Available images:
 
-| name                                  | FFmpeg included    | RPI Camera support |
-| ------------------------------------- | ------------------ | ------------------ |
-| bluenviron/mediamtx:latest            | :x:                | :x:                |
-| bluenviron/mediamtx:latest-ffmpeg     | :heavy_check_mark: | :x:                |
-| bluenviron/mediamtx:latest-rpi        | :x:                | :heavy_check_mark: |
-| bluenviron/mediamtx:latest-ffmpeg-rpi | :heavy_check_mark: | :heavy_check_mark: |
+| name                                  | FFmpeg included      | RPI Camera support   |
+| ------------------------------------- | -------------------- | -------------------- |
+| bluenviron/mediamtx:latest            | :x:                  | :x:                  |
+| bluenviron/mediamtx:latest-ffmpeg     | :heavy\_check\_mark: | :x:                  |
+| bluenviron/mediamtx:latest-rpi        | :x:                  | :heavy\_check\_mark: |
+| bluenviron/mediamtx:latest-ffmpeg-rpi | :heavy\_check\_mark: | :heavy\_check\_mark: |
 
 The `--network=host` flag is mandatory for RTSP to work, since Docker can change the source port of UDP packets for routing reasons, and this doesn't allow the server to identify the senders of the packets.
 
@@ -229,32 +227,23 @@ Otherwise, [compile the server from source](#openwrt-1).
 ## Basic usage
 
 1. Publish a stream. For instance, you can publish a video/audio file with _FFmpeg_:
-
    ```sh
    ffmpeg -re -stream_loop -1 -i file.ts -c copy -f rtsp rtsp://localhost:8554/mystream
    ```
-
    or _GStreamer_:
-
    ```sh
    gst-launch-1.0 rtspclientsink name=s location=rtsp://localhost:8554/mystream filesrc location=file.mp4 \
    ! qtdemux name=d d.video_0 ! queue ! s.sink_0 d.audio_0 ! queue ! s.sink_1
    ```
-
 2. Open the stream. For instance, you can open the stream with _VLC_:
-
    ```sh
    vlc --network-caching=50 rtsp://localhost:8554/mystream
    ```
-
    or _GStreamer_:
-
    ```sh
    gst-play-1.0 rtsp://localhost:8554/mystream
    ```
-
    or _FFmpeg_:
-
    ```sh
    ffmpeg -i rtsp://localhost:8554/mystream -c copy output.mp4
    ```
@@ -596,20 +585,15 @@ Note: this build disables Raspberry Pi Camera support by default to avoid extern
 _MediaMTX_ natively supports most of the Raspberry Pi Camera models, enabling high-quality and low-latency video streaming from the camera to any user, for any purpose. There are a couple of requirements:
 
 1. The server must run on a Raspberry Pi, with one of the following operating systems:
-
    - Raspberry Pi OS Bookworm
    - Raspberry Pi OS Bullseye
-
-   Both 32 bit and 64 bit architectures are supported.
-
+     Both 32 bit and 64 bit architectures are supported.
 2. If you are using Raspberry Pi OS Bullseye, make sure that the legacy camera stack is disabled. Type `sudo raspi-config`, then go to `Interfacing options`, `enable/disable legacy camera support`, choose `no`. Reboot the system.
 
 If you want to run the standard (non-Docker) version of the server:
 
 1. Download the server executable. If you're using 64-bit version of the operative system, make sure to pick the `arm64` variant.
-
 2. Edit `mediamtx.yml` and replace everything inside section `paths` with the following content:
-
    ```yml
    paths:
      cam:
@@ -1300,7 +1284,6 @@ Keep also in mind that not all H264 video streams can be played on Apple Devices
 
 - re-encode it by following instructions in this README
 - disable the Low-latency variant of HLS and go back to the legacy variant:
-
   ```yml
   hlsVariant: mpegts
   ```
@@ -1314,10 +1297,8 @@ To decrease the latency, you can:
 - try decreasing the hlsPartDuration parameter
 - try decreasing the hlsSegmentDuration parameter
 - The segment duration is influenced by the interval between the IDR frames of the video track. An IDR frame is a frame that can be decoded independently from the others. The server changes the segment duration in order to include at least one IDR frame into each segment. Therefore, you need to decrease the interval between the IDR frames. This can be done in two ways:
-
   - if the stream is being hardware-generated (i.e. by a camera), there's usually a setting called Key-Frame Interval in the camera configuration page
   - otherwise, the stream must be re-encoded. It's possible to tune the IDR frame interval by using ffmpeg's -g option:
-
     ```sh
     ffmpeg -i rtsp://original-stream -c:v libx264 -pix_fmt yuv420p -preset ultrafast -b:v 600k -max_muxing_queue_size 1024 -g 30 -f rtsp rtsp://localhost:$RTSP_PORT/compressed
     ```
@@ -1331,40 +1312,28 @@ All the configuration parameters are listed and commented in the [configuration 
 There are 3 ways to change the configuration:
 
 1. By editing the `mediamtx.yml` file, that is
-
    - included into the release bundle
    - available in the root folder of the Docker image (`/mediamtx.yml`); it can be overridden in this way:
-
      ```
      docker run --rm -it --network=host -v "$PWD/mediamtx.yml:/mediamtx.yml:ro" bluenviron/mediamtx
      ```
-
    The configuration can be changed dynamically when the server is running (hot reloading) by writing to the configuration file. Changes are detected and applied without disconnecting existing clients, whenever it's possible.
-
 2. By overriding configuration parameters with environment variables, in the format `MTX_PARAMNAME`, where `PARAMNAME` is the uppercase name of a parameter. For instance, the `rtspAddress` parameter can be overridden in the following way:
-
    ```
    MTX_RTSPADDRESS="127.0.0.1:8554" ./mediamtx
    ```
-
    Parameters that have array as value can be overridden by setting a comma-separated list. For example:
-
    ```
    MTX_RTSPTRANSPORTS="tcp,udp"
    ```
-
    Parameters in maps can be overridden by using underscores, in the following way:
-
    ```
    MTX_PATHS_TEST_SOURCE=rtsp://myurl ./mediamtx
    ```
-
    This method is particularly useful when using Docker; any configuration parameter can be changed by passing environment variables with the `-e` flag:
-
    ```
    docker run --rm -it --network=host -e MTX_PATHS_TEST_SOURCE=rtsp://myurl bluenviron/mediamtx
    ```
-
 3. By using the [Control API](#control-api).
 
 ### Authentication
@@ -1514,70 +1483,51 @@ The JWT is expected to contain a claim, with a list of permissions in the same f
 Clients are expected to pass the JWT in one of the following ways (from best to worst):
 
 1. Through the `Authorization: Bearer` HTTP header. This is possible if the protocol or feature is based on HTTP, like HLS, WebRTC, API, Metrics, pprof.
-
 2. As password. Username is arbitrary.
-
 3. As query parameter in the URL, with the `jwt` key. This method is discouraged since the JWT is publicly shared when the URL is shared, causing a security issue.
 
 These are the recommended methods for each client:
 
 | client       | protocol | method                | notes                                                                                                                                                              |
 | ------------ | -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web browsers | HLS      | Authorization: Bearer |                                                                                                                                                                    |
-| Web browsers | WebRTC   | Authorization: Bearer |                                                                                                                                                                    |
-| OBS Studio   | WebRTC   | Authorization: Bearer |                                                                                                                                                                    |
-| OBS Studio   | RTMP     | Query parameter       |                                                                                                                                                                    |
+| Web browsers | HLS      | Authorization: Bearer | <br />                                                                                                                                                             |
+| Web browsers | WebRTC   | Authorization: Bearer | <br />                                                                                                                                                             |
+| OBS Studio   | WebRTC   | Authorization: Bearer | <br />                                                                                                                                                             |
+| OBS Studio   | RTMP     | Query parameter       | <br />                                                                                                                                                             |
 | FFmpeg       | RTSP     | Query parameter       | password is truncated and cannot be used                                                                                                                           |
 | FFmpeg       | RTMP     | unsupported           | Passwords and query parameters are currently truncated to 1024 characters by FFmpeg, so it's impossible to use FFMPEG+RTMP+JWT                                     |
-| GStreamer    | RTSP     | Password              |                                                                                                                                                                    |
-| GStreamer    | RTMP     | Query parameter       |                                                                                                                                                                    |
+| GStreamer    | RTSP     | Password              | <br />                                                                                                                                                             |
+| GStreamer    | RTMP     | Query parameter       | <br />                                                                                                                                                             |
 | any          | SRT      | unsupported           | SRT truncates passwords and query parameters to 512 characters, so it's impossible to use SRT+JWT. See [#3430](https://github.com/bluenviron/mediamtx/issues/3430) |
 
 Here's a tutorial on how to setup the [Keycloak identity server](https://www.keycloak.org/) in order to provide JWTs:
 
 1. Start Keycloak:
-
    ```
    docker run --name=keycloak -p 8080:8080 -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:23.0.7 start-dev
    ```
-
-2. Open the Keycloak administration console on http://localhost:8080, click on _master_ in the top left corner, _create realm_, set realm name to `mediamtx`, Save
-
+2. Open the Keycloak administration console on <http://localhost:8080>, click on _master_ in the top left corner, _create realm_, set realm name to `mediamtx`, Save
 3. Open page _Client scopes_, _create client scope_, set name to `mediamtx`, Save
-
 4. Open tab _Mappers_, _Configure a new Mapper_, _User Attribute_
-
    - Name: `mediamtx_permissions`
    - User Attribute: `mediamtx_permissions`
    - Token Claim Name: `mediamtx_permissions`
    - Claim JSON Type: `JSON`
    - Multivalued: `On`
-
-   Save
-
+     Save
 5. Open page _Clients_, _Create client_, set Client ID to `mediamtx`, Next, Client authentication `On`, Next, Save
-
 6. Open tab _Credentials_, copy client secret somewhere
-
 7. Open tab _Client scopes_, _Add client scope_, Select `mediamtx`, Add, Default
-
 8. Open page _Users_, _Add user_, Username `testuser`, Tab credentials, _Set password_, pick a password, Save
-
 9. Open tab _Attributes_, _Add an attribute_
-
    - Key: `mediamtx_permissions`
    - Value: `{"action":"publish", "path": ""}`
-
-   You can add as many attributes with key `mediamtx_permissions` as you want, each with a single permission in it
-
+     You can add as many attributes with key `mediamtx_permissions` as you want, each with a single permission in it
 10. In MediaMTX, use the following URL:
-
     ```yml
     authJWTJWKS: http://localhost:8080/realms/mediamtx/protocol/openid-connect/certs
     ```
-
 11. Perform authentication on Keycloak:
-
     ```
     curl \
     -d "client_id=mediamtx" \
@@ -1587,9 +1537,7 @@ Here's a tutorial on how to setup the [Keycloak identity server](https://www.key
     -d "grant_type=password" \
     http://localhost:8080/realms/mediamtx/protocol/openid-connect/token
     ```
-
     The JWT is inside the `access_token` key of the response:
-
     ```json
     {
       "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICIyNzVjX3ptOVlOdHQ0TkhwWVk4Und6ZndUclVGSzRBRmQwY3lsM2wtY3pzIn0.eyJleHAiOjE3MDk1NTUwOTIsImlhdCI6MTcwOTU1NDc5MiwianRpIjoiMzE3ZTQ1NGUtNzczMi00OTM1LWExNzAtOTNhYzQ2ODhhYWIxIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9tZWRpYW10eCIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiI2NTBhZDA5Zi03MDgxLTQyNGItODI4Ni0xM2I3YTA3ZDI0MWEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJtZWRpYW10eCIsInNlc3Npb25fc3RhdGUiOiJjYzJkNDhjYy1kMmU5LTQ0YjAtODkzZS0wYTdhNjJiZDI1YmQiLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbIi8qIl0sInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIiwiZGVmYXVsdC1yb2xlcy1tZWRpYW10eCJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoibWVkaWFtdHggcHJvZmlsZSBlbWFpbCIsInNpZCI6ImNjMmQ0OGNjLWQyZTktNDRiMC04OTNlLTBhN2E2MmJkMjViZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwibWVkaWFtdHhfcGVybWlzc2lvbnMiOlt7ImFjdGlvbiI6InB1Ymxpc2giLCJwYXRocyI6ImFsbCJ9XSwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdHVzZXIifQ.Gevz7rf1qHqFg7cqtSfSP31v_NS0VH7MYfwAdra1t6Yt5rTr9vJzqUeGfjYLQWR3fr4XC58DrPOhNnILCpo7jWRdimCnbPmuuCJ0AYM-Aoi3PAsWZNxgmtopq24_JokbFArY9Y1wSGFvF8puU64lt1jyOOyxf2M4cBHCs_EarCKOwuQmEZxSf8Z-QV9nlfkoTUszDCQTiKyeIkLRHL2Iy7Fw7_T3UI7sxJjVIt0c6HCNJhBBazGsYzmcSQ_GrmhbUteMTg00o6FicqkMBe99uZFnx9wIBm_QbO9hbAkkzF923I-DTAQrFLxT08ESMepDwmzFrmnwWYBLE3u8zuUlCA",
@@ -1650,15 +1598,11 @@ Be aware that not all codecs can be saved with all formats, as described in the 
 To upload recordings to a remote location, you can use _MediaMTX_ together with [rclone](https://github.com/rclone/rclone), a command line tool that provides file synchronization capabilities with a huge variety of services (including S3, FTP, SMB, Google Drive):
 
 1. Download and install [rclone](https://github.com/rclone/rclone).
-
 2. Configure _rclone_:
-
    ```
    rclone config
    ```
-
 3. Place `rclone` into the `runOnInit` and `runOnRecordSegmentComplete` hooks:
-
    ```yml
    pathDefaults:
      # this is needed to sync segments after a crash.
@@ -1669,7 +1613,6 @@ To upload recordings to a remote location, you can use _MediaMTX_ together with 
      # replace myconfig with the name of the rclone config.
      runOnRecordSegmentComplete: rclone sync -v --min-age=1ms ./recordings myconfig:/my-path/recordings
    ```
-
    If you want to delete local segments after they are uploaded, replace `rclone sync` with `rclone move`.
 
 ### Playback recorded streams
@@ -1689,9 +1632,9 @@ http://localhost:9996/list?path=[mypath]&start=[start]&end=[end]
 
 Where:
 
-- [mypath] is the name of a path
-- [start] (optional) is the start date in [RFC3339 format](https://www.utctime.net/)
-- [end] (optional) is the end date in [RFC3339 format](https://www.utctime.net/)
+- \[mypath] is the name of a path
+- \[start] (optional) is the start date in [RFC3339 format](https://www.utctime.net/)
+- \[end] (optional) is the end date in [RFC3339 format](https://www.utctime.net/)
 
 The server will return a list of timespans in JSON format:
 
@@ -1718,10 +1661,10 @@ http://localhost:9996/get?path=[mypath]&start=[start]&duration=[duration]&format
 
 Where:
 
-- [mypath] is the path name
-- [start] is the start date in [RFC3339 format](https://www.utctime.net/)
-- [duration] is the maximum duration of the recording in seconds
-- [format] (optional) is the output format of the stream. Available values are "fmp4" (default) and "mp4"
+- \[mypath] is the path name
+- \[start] is the start date in [RFC3339 format](https://www.utctime.net/)
+- \[duration] is the maximum duration of the recording in seconds
+- \[format] (optional) is the output format of the stream. Available values are "fmp4" (default) and "mp4"
 
 All parameters must be [url-encoded](https://www.urlencoder.org/). For instance:
 
@@ -1813,7 +1756,6 @@ A browser can read read absolute timestamps with WebRTC if it exposes the [estim
 HTTP-based services (WebRTC, HLS, Control API, Playback Server, Metrics, pprof) can be exposed in a subfolder of an existing HTTP server or reverse proxy. The reverse proxy must be able to intercept HTTP requests addressed to MediaMTX and corresponding responses, and perform the following changes:
 
 - The subfolder path must be stripped from request paths. For instance, if the server is exposed behind `/subpath` and the reverse proxy receives a request with path `/subpath/mystream/index.m3u8`, this has to be changed into `/mystream/index.m3u8`.
-
 - Any `Location` header in responses must be prefixed with the subfolder path. For instance, if the server is exposed behind `/subpath` and the server sends a response with `Location: /mystream/index.m3u8`, this has to be changed into `Location: /subfolder/mystream/index.m3u8`.
 
 If _nginx_ is the reverse proxy, this can be achieved with the following configuration:
@@ -2287,21 +2229,16 @@ Where:
 When using WHIP or WHEP to establish a WebRTC connection, there are several ways to provide credentials.
 
 - If internal authentication or HTTP-based authentication is in use, username and password can be passed through the `Authorization: Basic` HTTP header:
-
   ```
   Authorization: Basic base64(user:pass)
   ```
-
   Where `base64(user:pass)` is the base64 encoding of "user:pass".
 
   When the `Authorization: Basic` header cannot be used (for instance, in software like OBS Studio), credentials can be passed through the `Authorization: Bearer` header, where value is the concatenation of username and password, separated by a colon:
-
   ```
   Authorization: Bearer username:password
   ```
-
 - If JWT-based authentication is in use, the JWT can be passed through the `Authorization: Bearer` header:
-
   ```
   Authorization: Bearer MY_JWT
   ```
@@ -2351,7 +2288,7 @@ webrtcICEServers2:
 
 Where user and pass are the username and password of the server. Note that port is not optional.
 
-If the server uses a secret-based authentication (for instance, coturn with the use-auth-secret option), it must be configured by using AUTH_SECRET as username, and the secret as password:
+If the server uses a secret-based authentication (for instance, coturn with the use-auth-secret option), it must be configured by using AUTH\_SECRET as username, and the secret as password:
 
 ```yml
 webrtcICEServers2:
@@ -2380,11 +2317,9 @@ In particular, reading and publishing H265 tracks with WebRTC was not possible u
 
 - Safari on iOS and macOS fully supports publishing and reading H265 tracks
 - Chrome on Windows supports publishing and reading H265 tracks when a GPU is present and when the browser is launched with the following flags:
-
   ```
   chrome.exe --enable-features=PlatformHEVCEncoderSupport,WebRtcAllowH265Receive,WebRtcAllowH265Send --force-fieldtrials=WebRTC-Video-H26xPacketBuffer/Enabled
   ```
-
   We are expecting these flags to become redundant in the future and the feature to be turned on by default.
 
 You can check what codecs your browser can publish or read with WebRTC by [using this tool](https://jsfiddle.net/v24s8q1f/).
@@ -2456,26 +2391,20 @@ rtsps://localhost:8322/mystream
 In some scenarios, when publishing or reading from the server with RTSP, frames can get corrupted. This can be caused by multiple reasons:
 
 - the write queue of the server is too small and can't keep up with the stream throughput. A solution consists in increasing its size:
-
   ```yml
   writeQueueSize: 1024
   ```
-
 - The stream throughput is too big and the stream can't be transmitted correctly with the UDP transport protocol. UDP is more performant, faster and more efficient than TCP, but doesn't have a retransmission mechanism, that is needed in case of streams that need a large bandwidth. A solution consists in switching to TCP:
-
   ```yml
   rtspTransports: [tcp]
   ```
-
   In case the source is a camera:
-
   ```yml
   paths:
     test:
       source: rtsp://..
       rtspTransport: tcp
   ```
-
 - The stream throughput is too big to be handled by the network between server and readers. Upgrade the network or decrease the stream bitrate by re-encoding it.
 
 ### RTMP-specific features
@@ -2509,7 +2438,7 @@ Be aware that RTMPS is currently unsupported by all major players. However, you 
 
 ### Standard
 
-Install git and Go &ge; 1.23. Clone the repository, enter into the folder and start the building process:
+Install git and Go ≥ 1.23. Clone the repository, enter into the folder and start the building process:
 
 ```sh
 git clone https://github.com/bluenviron/mediamtx
@@ -2546,7 +2475,7 @@ If the OpenWrt device doesn't have enough resources to compile, you can [cross c
 
 Cross compilation allows to build an executable for a target machine from another machine with different operating system or architecture. This is useful in case the target machine doesn't have enough resources for compilation or if you don't want to install the compilation dependencies on it.
 
-On the machine you want to use to compile, install git and Go &ge; 1.23. Clone the repository, enter into the folder and start the building process:
+On the machine you want to use to compile, install git and Go ≥ 1.23. Clone the repository, enter into the folder and start the building process:
 
 ```sh
 git clone https://github.com/bluenviron/mediamtx
@@ -2596,17 +2525,13 @@ The command will produce tarballs in folder `binaries/`.
 The official Docker image can be recompiled by following these steps:
 
 1. Build binaries for all supported platforms:
-
    ```sh
    make binaries
    ```
-
 2. Build the image by using one of the Dockerfiles inside the `docker/` folder:
-
    ```
    docker build . -f docker/standard.Dockerfile -t my-mediamtx
    ```
-
    A Dockerfile is available for each image variant (`standard.Dockerfile`, `ffmpeg.Dockerfile`, `rpi.Dockerfile`, `ffmpeg-rpi.Dockerfile`).
 
 ## License

@@ -9,7 +9,7 @@
 # Verbosity of the program; available values are "error", "warn", "info", "debug".
 logLevel: info
 # Destinations of log messages; available values are "stdout", "file" and "syslog".
-logDestinations: [file]
+logDestinations: [stdout]
 # If "file" is in logDestinations, this is the file which will receive the logs.
 logFile: logs/mediamtx.log
 # If "syslog" is in logDestinations, use prefix for logs.
@@ -488,6 +488,12 @@ pushAllowOrigin: "*"
 # If the server receives a request from one of these entries, IP in logs
 # will be taken from the X-Forwarded-For header.
 pushTrustedProxies: []
+
+###############################################
+# Global settings -> Snapshot parameters
+
+# Directory where snapshot images are saved.
+snapshotDir: ./snapshots
 
 ###############################################
 # Default path settings

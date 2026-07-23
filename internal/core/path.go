@@ -4,12 +4,18 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
+	"github.com/bluenviron/gortsplib/v4/pkg/format"
 
+	"github.com/bluenviron/mediamtx/internal/codec"
 	"github.com/bluenviron/mediamtx/internal/conf"
 	"github.com/bluenviron/mediamtx/internal/defs"
 	"github.com/bluenviron/mediamtx/internal/externalcmd"
@@ -18,6 +24,7 @@ import (
 	"github.com/bluenviron/mediamtx/internal/recorder"
 	"github.com/bluenviron/mediamtx/internal/staticsources"
 	"github.com/bluenviron/mediamtx/internal/stream"
+	"github.com/bluenviron/mediamtx/internal/unit"
 )
 
 func emptyTimer() *time.Timer {
@@ -84,6 +91,17 @@ type pathAPIStopRecordingReq struct {
 	res  chan pathAPIStopRecordingRes
 }
 
+type pathAPISnapshotRes struct {
+	imagePath string
+	err       error
+}
+
+type pathAPISnapshotReq struct {
+	name        string
+	snapshotDir string
+	res         chan pathAPISnapshotRes
+}
+
 type path struct {
 	parentCtx         context.Context
 	logLevel          conf.LogLevel
@@ -134,6 +152,7 @@ type path struct {
 	chAPIPathsGet             chan pathAPIPathsGetReq
 	chAPIStartRecording       chan pathAPIStartRecordingReq
 	chAPIStopRecording        chan pathAPIStopRecordingReq
+	chAPISnapshot             chan pathAPISnapshotReq
 
 	// out
 	done chan struct{}
@@ -162,6 +181,7 @@ func (pa *path) initialize() {
 	pa.chAPIPathsGet = make(chan pathAPIPathsGetReq)
 	pa.chAPIStartRecording = make(chan pathAPIStartRecordingReq)
 	pa.chAPIStopRecording = make(chan pathAPIStopRecordingReq)
+	pa.chAPISnapshot = make(chan pathAPISnapshotReq)
 	pa.done = make(chan struct{})
 
 	pa.Log(logger.Debug, "created")
@@ -354,6 +374,9 @@ func (pa *path) runInner() error {
 
 		case req := <-pa.chAPIStopRecording:
 			pa.doAPIStopRecording(req)
+
+		case req := <-pa.chAPISnapshot:
+			pa.doAPISnapshot(req)
 
 		case <-pa.ctx.Done():
 			return fmt.Errorf("terminated")
@@ -626,6 +649,186 @@ func (pa *path) doAPIStopRecording(req pathAPIStopRecordingReq) {
 
 	req.res <- pathAPIStopRecordingRes{err: nil}
 }
+
+func (pa *path) doAPISnapshot(req pathAPISnapshotReq) {
+	if pa.stream == nil {
+		req.res <- pathAPISnapshotRes{
+			err: defs.PathNoStreamAvailableError{PathName: pa.name},
+		}
+		return
+	}
+
+	// find the first video media
+	var videoMedia *description.Media
+	var videoFormat format.Format
+	for _, media := range pa.stream.Desc.Medias {
+		if media.Type == description.MediaTypeVideo {
+			videoMedia = media
+			if len(media.Formats) > 0 {
+				videoFormat = media.Formats[0]
+			}
+			break
+		}
+	}
+
+	if videoMedia == nil {
+		req.res <- pathAPISnapshotRes{
+			err: fmt.Errorf("no video track found on path '%s'", pa.name),
+		}
+		return
+	}
+
+	// determine codec ID for VideoTranscoder and build extradata
+	var codecID codec.VideoCodecID
+	var extraData []byte
+	switch vf := videoFormat.(type) {
+	case *format.H264:
+		codecID = codec.VideoCodecH264
+		if len(vf.SPS) > 0 {
+			extraData = append(extraData, startCodeH264...)
+			extraData = append(extraData, vf.SPS...)
+		}
+		if len(vf.PPS) > 0 {
+			extraData = append(extraData, startCodeH264...)
+			extraData = append(extraData, vf.PPS...)
+		}
+	case *format.H265:
+		codecID = codec.VideoCodecH265
+		if len(vf.VPS) > 0 {
+			extraData = append(extraData, startCodeH265...)
+			extraData = append(extraData, vf.VPS...)
+		}
+		if len(vf.SPS) > 0 {
+			extraData = append(extraData, startCodeH265...)
+			extraData = append(extraData, vf.SPS...)
+		}
+		if len(vf.PPS) > 0 {
+			extraData = append(extraData, startCodeH265...)
+			extraData = append(extraData, vf.PPS...)
+		}
+	default:
+		req.res <- pathAPISnapshotRes{
+			err: fmt.Errorf("unsupported video codec on path '%s'", pa.name),
+		}
+		return
+	}
+
+	snapReader := &snapshotReader{
+		logger: pa,
+	}
+
+	// create transcoder (width/height will be detected from first frame)
+	transcoder := &codec.VideoTranscoder{}
+	err := transcoder.Initialize(codecID, extraData)
+	if err != nil {
+		req.res <- pathAPISnapshotRes{err: err}
+		return
+	}
+	defer transcoder.Close()
+
+	jpegReady := make(chan []byte, 1)
+	var captured atomic.Bool
+
+	nalQueue := make(chan []byte, 64)
+	processDone := make(chan struct{})
+
+	// Separate goroutine to decode/encode, avoiding blocking the stream reader
+	go func() {
+		defer close(processDone)
+		for nalData := range nalQueue {
+			if captured.Load() {
+				return
+			}
+
+			jpeg, err := transcoder.DecodeAndEncode(nalData)
+			if err != nil {
+				continue
+			}
+			if len(jpeg) > 0 {
+				captured.Store(true)
+				select {
+				case jpegReady <- jpeg:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
+	pa.stream.AddReader(snapReader, videoMedia, videoFormat, func(u unit.Unit) error {
+		// stop processing after first capture
+		if captured.Load() {
+			return nil
+		}
+
+		var auData []byte
+
+		switch uu := u.(type) {
+		case *unit.H264:
+			for _, nalu := range uu.AU {
+				auData = append(auData, startCodeH264...)
+				auData = append(auData, nalu...)
+			}
+		case *unit.H265:
+			for _, nalu := range uu.AU {
+				auData = append(auData, startCodeH265...)
+				auData = append(auData, nalu...)
+			}
+		default:
+			return nil // skip non-H.264/H.265 units
+		}
+
+		if len(auData) == 0 {
+			return nil
+		}
+
+		// non-blocking send to processing goroutine
+		select {
+		case nalQueue <- auData:
+		default:
+			// queue full, skip this frame
+		}
+
+		return nil
+	})
+
+	pa.stream.StartReader(snapReader)
+
+	// wait for JPEG or timeout
+	timeout := time.NewTimer(30 * time.Second)
+
+	select {
+	case jpegData := <-jpegReady:
+		timeout.Stop()
+		close(nalQueue)
+		<-processDone
+
+		// save to file
+		now := time.Now()
+		safeName := strings.ReplaceAll(req.name, "/", "_")
+		fileName := safeName + "_" + now.Format("2006-01-02-15-04-05") + ".jpg"
+		filePath := filepath.Join(req.snapshotDir, fileName)
+
+		if err := os.WriteFile(filePath, jpegData, 0o644); err != nil {
+			req.res <- pathAPISnapshotRes{err: fmt.Errorf("failed to write file: %w", err)}
+			return
+		}
+
+		req.res <- pathAPISnapshotRes{imagePath: fileName}
+
+	case <-timeout.C:
+		close(nalQueue)
+		<-processDone
+		req.res <- pathAPISnapshotRes{err: fmt.Errorf("snapshot timed out on path '%s'", pa.name)}
+	}
+
+	pa.stream.RemoveReader(snapReader)
+}
+
+var (
+	startCodeH264 = []byte{0x00, 0x00, 0x00, 0x01}
+	startCodeH265 = []byte{0x00, 0x00, 0x00, 0x01}
+)
 
 func (pa *path) doAPIPathsGet(req pathAPIPathsGetReq) {
 	req.res <- pathAPIPathsGetRes{
@@ -1091,4 +1294,23 @@ func (pa *path) APIPathsGet(req pathAPIPathsGetReq) (*defs.APIPath, error) {
 	case <-pa.ctx.Done():
 		return nil, fmt.Errorf("terminated")
 	}
+}
+
+// APISnapshot is called by pathManager.
+func (pa *path) APISnapshot(req pathAPISnapshotReq) {
+	select {
+	case pa.chAPISnapshot <- req:
+	case <-pa.ctx.Done():
+		req.res <- pathAPISnapshotRes{err: fmt.Errorf("terminated")}
+	}
+}
+
+// snapshotReader implements stream.Reader for snapshot purposes.
+type snapshotReader struct {
+	logger logger.Writer
+}
+
+// Log implements logger.Writer.
+func (r *snapshotReader) Log(level logger.Level, format string, args ...interface{}) {
+	r.logger.Log(level, format, args...)
 }

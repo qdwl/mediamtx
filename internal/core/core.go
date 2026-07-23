@@ -352,6 +352,7 @@ func (p *Core) createResources(initial bool) error {
 			externalCmdPool:   p.externalCmdPool,
 			metrics:           p.metrics,
 			parent:            p,
+			snapshotDir:       p.conf.SnapshotDir,
 		}
 		p.pathManager.initialize()
 	}

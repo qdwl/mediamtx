@@ -72,6 +72,7 @@ type pathManager struct {
 	externalCmdPool   *externalcmd.Pool
 	metrics           *metrics.Metrics
 	parent            pathManagerParent
+	snapshotDir       string
 
 	ctx         context.Context
 	ctxCancel   func()
@@ -94,6 +95,7 @@ type pathManager struct {
 	chAPIPathsGet       chan pathAPIPathsGetReq
 	chAPIStartRecording chan pathAPIStartRecordingReq
 	chAPIStopRecording  chan pathAPIStopRecordingReq
+	chAPISnapshot       chan pathAPISnapshotReq
 }
 
 func (pm *pathManager) initialize() {
@@ -116,6 +118,7 @@ func (pm *pathManager) initialize() {
 	pm.chAPIPathsGet = make(chan pathAPIPathsGetReq)
 	pm.chAPIStartRecording = make(chan pathAPIStartRecordingReq)
 	pm.chAPIStopRecording = make(chan pathAPIStopRecordingReq)
+	pm.chAPISnapshot = make(chan pathAPISnapshotReq)
 
 	for _, pathConf := range pm.pathConfs {
 		if pathConf.Regexp == nil {
@@ -194,6 +197,9 @@ outer:
 
 		case req := <-pm.chAPIStopRecording:
 			pm.doAPIPathStopRecording(req)
+
+		case req := <-pm.chAPISnapshot:
+			pm.doAPIPathSnapshot(req)
 
 		case <-pm.ctx.Done():
 			break outer
@@ -409,6 +415,16 @@ func (pm *pathManager) doAPIPathStopRecording(req pathAPIStopRecordingReq) {
 	}
 
 	req.res <- pathAPIStopRecordingRes{path: pd.path}
+}
+
+func (pm *pathManager) doAPIPathSnapshot(req pathAPISnapshotReq) {
+	pd, ok := pm.paths[req.name]
+	if !ok {
+		req.res <- pathAPISnapshotRes{err: conf.ErrPathNotFound}
+		return
+	}
+
+	pd.path.APISnapshot(req)
 }
 
 func (pm *pathManager) createPath(
@@ -672,4 +688,25 @@ func (pm *pathManager) APIPathStopRecording(name string) error {
 		return fmt.Errorf("terminated")
 	}
 
+}
+
+// APIPathSnapshot is called by api.
+func (pm *pathManager) APIPathSnapshot(name string) (*defs.APIPathSnapshot, error) {
+	req := pathAPISnapshotReq{
+		name:        name,
+		snapshotDir: pm.snapshotDir,
+		res:         make(chan pathAPISnapshotRes),
+	}
+
+	select {
+	case pm.chAPISnapshot <- req:
+		res := <-req.res
+		if res.err != nil {
+			return nil, res.err
+		}
+		return &defs.APIPathSnapshot{ImagePath: res.imagePath}, nil
+
+	case <-pm.ctx.Done():
+		return nil, fmt.Errorf("terminated")
+	}
 }
