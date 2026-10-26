@@ -46,6 +46,18 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 			}
 			medias = append(medias, medi)
 
+			agg := &auAggregator{
+				onAccessUnit: func(pts time.Duration, au h264.AnnexB) {
+					(*stream).WriteUnit(medi, medi.Formats[0], &unit.H264{
+						Base: unit.Base{
+							NTP: time.Now(),
+							PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
+						},
+						AU: au,
+					})
+				},
+			}
+
 			conn.onFrameFunc(track.StreamType, func(pts time.Duration, data []byte) {
 				var dec h264.AnnexB
 				err := dec.Unmarshal(data)
@@ -53,13 +65,9 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 					return
 				}
 
-				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H264{
-					Base: unit.Base{
-						NTP: time.Now(),
-						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
-					},
-					AU: dec,
-				})
+				for _, nalu := range dec {
+					agg.push(nalu, pts)
+				}
 			})
 
 		case *mpegps.CodecH265:
@@ -75,6 +83,19 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 			}
 			medias = append(medias, medi)
 
+			agg := &auAggregator{
+				h265: true,
+				onAccessUnit: func(pts time.Duration, au h264.AnnexB) {
+					(*stream).WriteUnit(medi, medi.Formats[0], &unit.H265{
+						Base: unit.Base{
+							NTP: time.Now(),
+							PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
+						},
+						AU: au,
+					})
+				},
+			}
+
 			conn.onFrameFunc(track.StreamType, func(pts time.Duration, data []byte) {
 				var dec h264.AnnexB
 				err := dec.Unmarshal(data)
@@ -82,13 +103,9 @@ func ToStream(conn *Conn, stream **stream.Stream) ([]*description.Media, error) 
 					return
 				}
 
-				(*stream).WriteUnit(medi, medi.Formats[0], &unit.H265{
-					Base: unit.Base{
-						NTP: time.Now(),
-						PTS: durationToTimestamp(pts*time.Millisecond, medi.Formats[0].ClockRate()),
-					},
-					AU: dec,
-				})
+				for _, nalu := range dec {
+					agg.push(nalu, pts)
+				}
 			})
 
 		case *mpegps.CodecMPEG4Audio:

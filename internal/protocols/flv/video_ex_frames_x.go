@@ -8,9 +8,10 @@ import (
 
 // VideoExFramesX is a FramesX extended message.
 type VideoExFramesX struct {
-	DTS     time.Duration
-	FourCC  message.FourCC
-	Payload []byte
+	DTS        time.Duration
+	FourCC     message.FourCC
+	IsKeyFrame bool
+	Payload    []byte
 }
 
 func (m VideoExFramesX) marshalBodySize() int {
@@ -20,7 +21,7 @@ func (m VideoExFramesX) marshalBodySize() int {
 func (m VideoExFramesX) marshal() (*Tag, error) {
 	body := make([]byte, m.marshalBodySize())
 
-	body[0] = 0b10000000 | byte(message.VideoExTypeFramesX)
+	body[0] = 0b10000000 | frameType(m.IsKeyFrame)<<4 | byte(message.VideoExTypeFramesX)
 	body[1] = uint8(m.FourCC >> 24)
 	body[2] = uint8(m.FourCC >> 16)
 	body[3] = uint8(m.FourCC >> 8)

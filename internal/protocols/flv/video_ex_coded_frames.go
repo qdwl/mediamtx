@@ -8,10 +8,11 @@ import (
 
 // VideoExCodedFrames is a CodedFrames extended message.
 type VideoExCodedFrames struct {
-	DTS      time.Duration
-	FourCC   message.FourCC
-	PTSDelta time.Duration
-	Payload  []byte
+	DTS        time.Duration
+	FourCC     message.FourCC
+	PTSDelta   time.Duration
+	IsKeyFrame bool
+	Payload    []byte
 }
 
 func (m VideoExCodedFrames) marshalBodySize() int {
@@ -25,7 +26,7 @@ func (m VideoExCodedFrames) marshalBodySize() int {
 func (m VideoExCodedFrames) marshal() (*Tag, error) {
 	body := make([]byte, m.marshalBodySize())
 
-	body[0] = 0b10000000 | byte(message.VideoExTypeCodedFrames)
+	body[0] = 0b10000000 | frameType(m.IsKeyFrame)<<4 | byte(message.VideoExTypeCodedFrames)
 	body[1] = uint8(m.FourCC >> 24)
 	body[2] = uint8(m.FourCC >> 16)
 	body[3] = uint8(m.FourCC >> 8)

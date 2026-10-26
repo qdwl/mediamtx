@@ -204,16 +204,11 @@ func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, 
 	go func() {
 		defer conn.Close()
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
-				s.Log(logger.Error, "ws read message failed %s", err.Error())
-				return
-			}
-
 			messageType, p, err := conn.ReadMessage()
 			if err != nil {
 				// 检查是否是正常关闭
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-					s.Log(logger.Error, "client close connection %s", err.Error())
+					s.Log(logger.Info, "client close connection %s", err.Error())
 				} else {
 					s.Log(logger.Error, "read message faield: %s", err.Error())
 				}
@@ -227,7 +222,8 @@ func (s *httpServer) handleWebSocketFLV(w http.ResponseWriter, r *http.Request, 
 
 			case websocket.PingMessage:
 				s.Log(logger.Info, "receive client ping message")
-				conn.WriteMessage(websocket.PongMessage, p)
+				// WriteControl 可以在写协程工作时并发调用
+				conn.WriteControl(websocket.PongMessage, p, time.Now().Add(10*time.Second)) //nolint:errcheck
 
 			case websocket.TextMessage:
 				s.Log(logger.Info, "receive client text message")

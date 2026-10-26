@@ -88,6 +88,7 @@ type Conn struct {
 	OnFrameFuncMap      map[uint8]OnFrameFunc
 	buf                 []byte
 	timebase            int64
+	trackTimebases      map[uint8]int64
 	payloadType         uint8
 	streamType          string
 	lastActiveTime      time.Time
@@ -133,6 +134,7 @@ func NewConn(
 		payloadType:    payloadType,
 		streamType:     streamType,
 		frameCache:     make([]*PsFrame, 0),
+		trackTimebases: make(map[uint8]int64),
 		lastActiveTime: time.Now(),
 		packetChan:     make(chan mpeg2.Display),
 		done:           make(chan struct{}),
@@ -284,20 +286,29 @@ func (c *Conn) StartRead() {
 }
 
 func (c *Conn) OnFrame(frame []byte, cid mpeg2.PS_STREAM_TYPE, pts uint64, dts uint64) {
-	if c.timebase == 0 {
-		if c.streamType == "playback" {
-			c.timebase = time.Now().UnixMilli()
-
-		} else {
-			c.timebase = int64(pts)
-		}
-	}
-
 	var ts time.Duration
+
 	if c.streamType == "playback" {
+		if c.timebase == 0 {
+			c.timebase = time.Now().UnixMilli()
+		}
 		ts = time.Duration(time.Now().UnixMilli() - c.timebase)
 	} else {
-		ts = time.Duration(pts - uint64(c.timebase))
+		// every track has its own PTS base: devices often start the audio and
+		// the video with different bases, and using a single base for all
+		// tracks generates negative timestamps that, once converted, become
+		// huge values (i.e. 4294951xxx milliseconds).
+		key := uint8(cid)
+		base, ok := c.trackTimebases[key]
+		if !ok {
+			base = int64(pts)
+			c.trackTimebases[key] = base
+		}
+
+		ts = time.Duration(int64(pts) - base)
+		if ts < 0 {
+			ts = 0
+		}
 	}
 
 	if !c.startRead.Load() {
