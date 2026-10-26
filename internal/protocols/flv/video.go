@@ -24,6 +24,20 @@ const (
 	VideoTypeEOS    VideoType = 2
 )
 
+// frame types of video tags (Enhanced RTMP / Enhanced FLV)
+const (
+	FrameTypeKeyFrame   = 1
+	FrameTypeInterFrame = 2
+)
+
+// frameType returns the frame type to insert in the first byte of a video tag.
+func frameType(isKeyFrame bool) uint8 {
+	if isKeyFrame {
+		return FrameTypeKeyFrame
+	}
+	return FrameTypeInterFrame
+}
+
 // Video is a video tag.
 type Video struct {
 	DTS        time.Duration

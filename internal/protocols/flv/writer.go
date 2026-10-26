@@ -183,18 +183,20 @@ func (w *Writer) WriteH265(pts time.Duration, dts time.Duration, au [][]byte) er
 
 	if pts != dts {
 		return w.Conn.Write(&VideoExCodedFrames{
-			Payload:  avcc,
-			FourCC:   message.FourCCHEVC,
-			DTS:      dts,
-			PTSDelta: pts - dts,
-		})
-	} else {
-		return w.Conn.Write(&VideoExFramesX{
-			Payload: avcc,
-			FourCC:  message.FourCCHEVC,
-			DTS:     dts,
+			Payload:    avcc,
+			FourCC:     message.FourCCHEVC,
+			DTS:        dts,
+			PTSDelta:   pts - dts,
+			IsKeyFrame: h265.IsRandomAccess(au),
 		})
 	}
+
+	return w.Conn.Write(&VideoExFramesX{
+		Payload:    avcc,
+		FourCC:     message.FourCCHEVC,
+		DTS:        dts,
+		IsKeyFrame: h265.IsRandomAccess(au),
+	})
 }
 
 // WriteMPEG4Audio writes MPEG-4 Audio data.
